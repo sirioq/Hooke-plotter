@@ -482,7 +482,7 @@ input.toggle-cb:disabled + .toggle-btn {
       <button class="btn btn-ghost" onclick="document.getElementById('fileInput').click()">↑ Load data</button>
       <input type="file" id="fileInput" accept=".json" style="display:none" onchange="loadData(event)">
     </div>
-    <div class="stats-row">
+    <div class="stats-row" id="statsRow">
       <div class="pill">
         <span class="pill-label">Points</span>
         <span class="pill-value" id="statN">0</span>
@@ -506,7 +506,7 @@ input.toggle-cb:disabled + .toggle-btn {
       </div>
     </div>
 
-    <div class="chart-card">
+    <div class="chart-card" id="chartCard">
       <div class="empty-state" id="emptyState">
         <div class="empty-icon">✦</div>
         <h3>No data yet</h3>
@@ -650,7 +650,12 @@ function renderRows() {
         const r = rows.find(r => r.id === +div.dataset.rowId);
         if (!r) return;
         r.anomalous = !r.anomalous;
-        updateDiv(div, r, showErr, cols);
+        // Read current state fresh rather than using stale closure values
+        const currentShowErr = errorsOn();
+        const currentCols = currentShowErr
+          ? '1fr 0.65fr 1fr 0.65fr 22px'
+          : '1fr 1fr 22px';
+        updateDiv(div, r, currentShowErr, currentCols);
         updateChart();
       });
       div.appendChild(btnA);
@@ -1006,6 +1011,18 @@ function updateChart() {
     borderColor: 'rgba(224,123,57,0.85)', borderWidth: 2, borderDash: [5,3], pointRadius: 0,
   });
 
+  // ── White background plugin (ensures PNG export has white bg, not transparent) ──
+  const whiteBgPlugin = {
+    id: 'whiteBg',
+    beforeDraw(chart) {
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, chart.width, chart.height);
+      ctx.restore();
+    }
+  };
+
   // ── Error bar plugin ────────────────────────────────────────────────
   const errorBarPlugin = {
     id: 'errorBars',
@@ -1084,8 +1101,8 @@ function updateChart() {
         drawSegments(titleHTML, left + (right - left) / 2, top - 14, 0, 22, '#2c2825', "'DM Serif Display',serif");
       }
 
-      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + 40, 0, 14, '#9a9189');
-      drawSegments(yLabelHTML, left - 40, top + (bottom - top) / 2, -Math.PI / 2, 14, '#9a9189');
+      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + 40, 0, 14, '#4a4642');
+      drawSegments(yLabelHTML, left - 40, top + (bottom - top) / 2, -Math.PI / 2, 14, '#4a4642');
 
       // Draw circles around anomalous points
       if (anomalyPts.length) {
@@ -1111,7 +1128,7 @@ function updateChart() {
   chart = new Chart(document.getElementById('myChart').getContext('2d'), {
     type: 'scatter',
     data: {datasets},
-    plugins: [errorBarPlugin, axisTitlePlugin],
+    plugins: [whiteBgPlugin, errorBarPlugin, axisTitlePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1145,14 +1162,14 @@ function updateChart() {
         x: {
           title: {display: false},
           grid: {color: '#f0ede9'},
-          ticks: {color: '#9a9189', font: {family: 'DM Sans', size: 11}},
+          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
           border: {color: '#e8e6e1'},
           ...(cbExtra.checked ? {min: Math.min(0, ...normalPts.map(p => p.x))} : {}),
         },
         y: {
           title: {display: false},
           grid: {color: '#f0ede9'},
-          ticks: {color: '#9a9189', font: {family: 'DM Sans', size: 11}},
+          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
           border: {color: '#e8e6e1'},
         }
       }
@@ -1163,34 +1180,47 @@ function updateChart() {
 // ── Export image ───────────────────────────────────────────────────────
 function exportImage() {
   if (!chart) return;
-  const area = document.getElementById('chartArea');
-  const exportRow = area.querySelector('.export-row');
+  const SCALE = window.devicePixelRatio * 3;
+  const statsRow = document.getElementById('statsRow');
+  const chartCard = document.getElementById('chartCard');
 
-  // Temporarily hide export buttons so they don't appear in screenshot
-  exportRow.style.display = 'none';
+  // Capture stats pills and chart card separately, then composite
+  const captureStats = statsRow
+    ? html2canvas(statsRow, {backgroundColor: '#ffffff', scale: SCALE, useCORS: true, logging: false})
+    : Promise.resolve(null);
 
-  // Force white background for screenshot
-  const origBg = area.style.background;
-  area.style.background = '#ffffff';
+  const captureChart = html2canvas(chartCard, {backgroundColor: '#ffffff', scale: SCALE, useCORS: true, logging: false});
 
-  html2canvas(area, {
-    backgroundColor: '#ffffff',
-    scale: window.devicePixelRatio * 1.5,
-    useCORS: true,
-    logging: false,
-  }).then(canvas => {
-    // Restore UI
-    exportRow.style.display = '';
-    area.style.background = origBg;
+  Promise.all([captureStats, captureChart]).then(([statsCanvas, chartCanvas]) => {
+    const GAP = Math.round(12 * SCALE);
+    const PAD = Math.round(20 * SCALE);
+    const statsH = statsCanvas ? statsCanvas.height : 0;
+    const totalH = (statsH ? statsH + GAP : 0) + chartCanvas.height + PAD * 2;
+    const totalW = Math.max(chartCanvas.width, statsCanvas ? statsCanvas.width : 0) + PAD * 2;
+
+    const off = document.createElement('canvas');
+    off.width = totalW;
+    off.height = totalH;
+    const ctx = off.getContext('2d');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    let y = PAD;
+    if (statsCanvas) {
+      // Centre stats horizontally
+      const sx = Math.round((totalW - statsCanvas.width) / 2);
+      ctx.drawImage(statsCanvas, sx, y);
+      y += statsCanvas.height + GAP;
+    }
+    ctx.drawImage(chartCanvas, PAD, y);
 
     const titleRaw = document.getElementById('graphTitle').value || 'graph';
     const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
+    a.href = off.toDataURL('image/png');
     a.download = titleRaw.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.png';
     a.click();
   }).catch(() => {
-    exportRow.style.display = '';
-    area.style.background = origBg;
     alert('Screenshot failed — please try again.');
   });
 }
