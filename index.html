@@ -363,6 +363,80 @@ input.toggle-cb:disabled + .toggle-btn {
 .modal textarea:focus { border-color: var(--border-focus); background: white; }
 .modal-footer { display: flex; gap: 6px; justify-content: flex-end; }
 </style>
+
+<style>
+/* ── Guide modal styles ── */
+#guideContent .section { margin-bottom: 48px; }
+#guideContent .section-label { font-size:0.63rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:8px; }
+#guideContent h2 { font-family:'DM Serif Display',serif;font-size:1.7rem;font-weight:400;line-height:1.2;margin-bottom:14px; }
+#guideContent h3 { font-family:'DM Serif Display',serif;font-size:1.2rem;font-weight:400;margin-bottom:8px;margin-top:28px; }
+#guideContent h4 { font-size:0.85rem;font-weight:700;margin-bottom:4px;margin-top:18px; }
+#guideContent p { margin-bottom:12px;font-size:0.9rem;line-height:1.7; }
+#guideContent p.eq { font-family:'DM Serif Display',serif;font-size:0.95rem;color:var(--accent);margin:2px 0 8px;font-style:italic; }
+#guideContent hr.divider { border:none;border-top:1px solid var(--border);margin:40px 0; }
+#guideContent .callout { border-radius:10px;padding:14px 18px;margin:16px 0;font-size:0.87rem;line-height:1.6; }
+#guideContent .callout-title { font-weight:700;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:4px; }
+#guideContent .callout.tip { background:var(--blue-bg);border-left:3px solid var(--blue); }
+#guideContent .callout.tip .callout-title { color:var(--blue); }
+#guideContent .callout.note { background:var(--soft);border-left:3px solid var(--border); }
+#guideContent .callout.note .callout-title { color:var(--muted); }
+#guideContent .callout.warning { background:var(--orange-bg);border-left:3px solid var(--orange); }
+#guideContent .callout.warning .callout-title { color:var(--orange); }
+#guideContent .callout.example { background:var(--green-bg);border-left:3px solid var(--green); }
+#guideContent .callout.example .callout-title { color:var(--green); }
+#guideContent .steps { list-style:none;padding:0;margin:18px 0; }
+#guideContent .steps li { display:grid;grid-template-columns:32px 1fr;gap:12px;margin-bottom:16px;align-items:start; }
+#guideContent .step-num { width:32px;height:32px;background:var(--accent);color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;margin-top:2px; }
+#guideContent .step-body { font-size:0.88rem;line-height:1.65; }
+#guideContent .data-table { width:100%;border-collapse:collapse;margin:14px 0;font-size:0.83rem; }
+#guideContent .data-table th { background:var(--soft);color:var(--muted);font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:8px 12px;border:1px solid var(--border);text-align:left; }
+#guideContent .data-table td { padding:7px 12px;border:1px solid var(--border);text-align:center;font-variant-numeric:tabular-nums; }
+#guideContent .data-table tr:nth-child(even) td { background:var(--soft); }
+#guideContent .data-table .anom td { text-decoration:line-through;opacity:0.5; }
+#guideContent .feature-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0; }
+#guideContent .feature-card { background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(44,40,37,0.06); }
+#guideContent .feature-card h4 { margin-top:0;font-size:0.86rem; }
+#guideContent .feature-card p { font-size:0.79rem;color:var(--muted);margin:0; }
+#guideContent .pill-demo { display:flex;gap:8px;flex-wrap:wrap;margin:12px 0; }
+#guideContent .g-pill { background:var(--white);border:1px solid var(--border);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;box-shadow:0 1px 4px rgba(44,40,37,0.06); }
+#guideContent .g-pill-label { font-size:0.6rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em; }
+#guideContent .g-pill-value { font-size:0.8rem;font-weight:600; }
+#guideContent .ui-tag { display:inline-block;background:var(--soft);border:1px solid var(--border);border-radius:5px;padding:1px 7px;font-size:0.77rem;font-weight:600;color:var(--text); }
+#guideContent .ui-tag.pink { background:var(--accent-bg);border-color:var(--accent-border);color:var(--accent); }
+#guideContent kbd { background:var(--soft);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:0.8rem; }
+#guideContent ul { margin:8px 0 12px 20px;font-size:0.88rem;line-height:2; }
+</style>
+
+<style>
+/* ── Guide modal content styles ── */
+#guideContent { font-family: 'DM Sans', sans-serif; color: var(--text); }
+.g-section-label { font-size: 0.63rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.g-h2 { font-family: 'DM Serif Display', serif; font-size: 1.6rem; font-weight: 400; line-height: 1.2; margin-bottom: 14px; }
+.g-h3 { font-family: 'DM Serif Display', serif; font-size: 1.15rem; font-weight: 400; margin: 28px 0 8px; }
+.g-h4 { font-size: 0.83rem; font-weight: 700; margin: 16px 0 4px; }
+.g-p { font-size: 0.88rem; line-height: 1.7; margin-bottom: 12px; }
+.g-eq { font-family: 'DM Serif Display', serif; font-size: 0.92rem; color: var(--accent); font-style: italic; margin: 2px 0 8px; }
+.g-fp { font-size: 0.78rem; color: var(--muted); margin: 0; line-height: 1.5; }
+.g-callout { border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 0.84rem; line-height: 1.6; }
+.g-callout-title { font-weight: 700; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+.g-tip { background: #eef3fb; border-left: 3px solid #4a7fc1; }
+.g-tip .g-callout-title { color: #4a7fc1; }
+.g-note { background: var(--soft); border-left: 3px solid var(--border); }
+.g-note .g-callout-title { color: var(--muted); }
+.g-warning { background: #fdf3ec; border-left: 3px solid #e07b39; }
+.g-warning .g-callout-title { color: #e07b39; }
+.g-example { background: #eef7f2; border-left: 3px solid #4a9e6e; }
+.g-example .g-callout-title { color: #4a9e6e; }
+.g-steps { list-style: none; padding: 0; margin: 14px 0; }
+.g-steps li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; margin-bottom: 14px; align-items: start; }
+.g-step-num { width: 28px; height: 28px; background: var(--accent); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.g-step-body { font-size: 0.86rem; line-height: 1.6; }
+.g-ul { margin: 8px 0 12px 18px; font-size: 0.86rem; line-height: 2; }
+.g-tag { display: inline-block; background: var(--soft); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 0.76rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+.g-tag.g-pink { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+.g-feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+.g-feature-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+</style>
 </head>
 <body>
 
@@ -481,6 +555,7 @@ input.toggle-cb:disabled + .toggle-btn {
       <button class="btn btn-ghost" onclick="saveData()">↓ Save data</button>
       <button class="btn btn-ghost" onclick="document.getElementById('fileInput').click()">↑ Load data</button>
       <input type="file" id="fileInput" accept=".json" style="display:none" onchange="loadData(event)">
+      <button class="btn btn-ghost" onclick="openGuide()" style="font-weight:600;border-color:var(--accent);color:var(--accent);">? Guide</button>
     </div>
     <div class="stats-row" id="statsRow">
       <div class="pill">
@@ -513,6 +588,57 @@ input.toggle-cb:disabled + .toggle-btn {
         <p>Add data points on the left and your graph will appear here.</p>
       </div>
       <canvas id="myChart" style="display:none"></canvas>
+    </div>
+  </div>
+</div>
+
+
+<!-- Guide modal -->
+<div class="modal-overlay" id="guideModal" style="align-items:stretch;padding:0;">
+  <div style="
+    background:var(--white);
+    width:100%;max-width:860px;
+    margin:0 auto;
+    display:flex;flex-direction:column;
+    height:100vh;
+    position:relative;
+  ">
+    <!-- Guide header -->
+    <div style="
+      background:var(--white);
+      border-bottom:1px solid var(--border);
+      padding:16px 28px;
+      display:flex;align-items:center;
+      gap:12px;flex-shrink:0;
+      position:sticky;top:0;z-index:10;
+    ">
+      <div style="width:30px;height:30px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">📈</div>
+      <span style="font-family:'DM Serif Display',serif;font-size:1.2rem;">Hooke Plotter</span>
+      <span style="background:var(--accent-bg);border:1px solid var(--accent-border);color:var(--accent);font-size:0.68rem;font-weight:600;padding:2px 9px;border-radius:20px;letter-spacing:0.05em;margin-left:4px;">Student Guide</span>
+      <button onclick="closeGuide()" style="
+        margin-left:auto;
+        background:transparent;border:1.5px solid var(--border);
+        color:var(--muted);border-radius:8px;
+        padding:6px 14px;font-family:'DM Sans',sans-serif;
+        font-size:0.8rem;font-weight:500;cursor:pointer;
+      ">✕ Close</button>
+    </div>
+    <!-- Guide nav -->
+    <nav style="
+      background:var(--white);
+      border-bottom:1px solid var(--border);
+      padding:0 28px;
+      display:flex;gap:0;
+      overflow-x:auto;flex-shrink:0;
+    ">
+      <a href="#" onclick="showGuideSection('g-walkthrough');return false;" class="gnav-link gnav-active" data-sec="g-walkthrough" style="display:inline-block;padding:12px 18px;font-size:0.8rem;font-weight:500;color:var(--accent);text-decoration:none;border-bottom:2px solid var(--accent);white-space:nowrap;">Worked Example</a>
+      <a href="#" onclick="showGuideSection('g-reference');return false;" class="gnav-link" data-sec="g-reference" style="display:inline-block;padding:12px 18px;font-size:0.8rem;font-weight:500;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap;">Reference</a>
+      <a href="#" onclick="showGuideSection('g-interface');return false;" class="gnav-link" data-sec="g-interface" style="display:inline-block;padding:12px 18px;font-size:0.8rem;font-weight:500;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap;">Interface Guide</a>
+      <a href="#" onclick="showGuideSection('g-export');return false;" class="gnav-link" data-sec="g-export" style="display:inline-block;padding:12px 18px;font-size:0.8rem;font-weight:500;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap;">Exporting</a>
+    </nav>
+    <!-- Guide content -->
+    <div id="guideContent" style="flex:1;overflow-y:auto;padding:40px 40px 60px;">
+      <!-- sections injected by JS -->
     </div>
   </div>
 </div>
@@ -1296,6 +1422,121 @@ function loadData(event) {
 }
 
 // ── Startup ────────────────────────────────────────────────────────────
+
+// ── Guide modal ────────────────────────────────────────────────────────
+const GUIDE_SECTIONS = {
+  'g-walkthrough': `
+    <div class="g-section-label">Worked Example</div>
+    <h2 class="g-h2">Plotting a Hooke's Law experiment</h2>
+    <p class="g-p">This walkthrough takes you through a complete Hooke's Law practical — entering data, adding uncertainties, identifying an anomalous result, and extracting the spring constant.</p>
+    <div class="g-callout g-example"><div class="g-callout-title">The experiment</div>A spring is loaded with weights and the extension measured each time. We expect a linear relationship: <strong>F = kx</strong>, where <em>k</em> is the spring constant (gradient of the graph) in N m<sup>−1</sup>.</div>
+    <h3 class="g-h3">Step 1 — Set up your axes</h3>
+    <ol class="g-steps">
+      <li><div class="g-step-num">1</div><div class="g-step-body"><strong>Enter a graph title.</strong> Use <code>^</code> for superscripts — e.g. <code>m^2</code> becomes m².</div></li>
+      <li><div class="g-step-num">2</div><div class="g-step-body"><strong>Set the X axis label</strong> to <em>Extension</em> and units to <em>m</em>.</div></li>
+      <li><div class="g-step-num">3</div><div class="g-step-body"><strong>Set the Y axis label</strong> to <em>Force</em> and units to <em>N</em>.</div></li>
+      <li><div class="g-step-num">4</div><div class="g-step-body"><strong>Leave the trend line as Linear</strong> — Hooke's Law predicts a straight line.</div></li>
+    </ol>
+    <div class="g-callout g-tip"><div class="g-callout-title">Scale factors</div>If your x values are in GHz, set the ×10<sup>n</sup> box to <strong>9</strong>. The axis reads <em>Frequency / 10⁹ Hz</em> and the gradient is automatically converted to SI units.</div>
+    <h3 class="g-h3">Step 2 — Enter your data</h3>
+    <p class="g-p">Enter extension in the X column and force in the Y column.</p>
+    <div class="g-callout g-tip"><div class="g-callout-title">Paste from a spreadsheet</div>Select two columns in Excel or Google Sheets, copy, then click <span class="g-tag">Paste data</span>. Tab-separated values are read automatically.</div>
+    <h3 class="g-h3">Step 3 — Add uncertainties</h3>
+    <ol class="g-steps">
+      <li><div class="g-step-num">1</div><div class="g-step-body">Toggle on <span class="g-tag g-pink">± Uncertainty columns</span>.</div></li>
+      <li><div class="g-step-num">2</div><div class="g-step-body">Use the global uncertainty boxes that appear. Type <strong>0.001</strong> for X and <strong>0.1</strong> for Y — all rows fill automatically.</div></li>
+      <li><div class="g-step-num">3</div><div class="g-step-body">Click any ±x or ±y cell to override the global value for that row.</div></li>
+    </ol>
+    <div class="g-callout g-note"><div class="g-callout-title">Percentage uncertainties</div>Type <strong>2%</strong> to use a percentage — Hooke Plotter calculates the absolute uncertainty for each point automatically.</div>
+    <h3 class="g-h3">Step 4 — Mark the anomalous point</h3>
+    <ol class="g-steps">
+      <li><div class="g-step-num">1</div><div class="g-step-body">Find the suspect row and click the <span class="g-tag g-pink">○</span> button. The row fades and the point is circled on the graph.</div></li>
+      <li><div class="g-step-num">2</div><div class="g-step-body">The line of best fit, gradient, and y-intercept <strong>automatically exclude</strong> this point.</div></li>
+      <li><div class="g-step-num">3</div><div class="g-step-body">In your write-up, explain <em>why</em> the point is anomalous — not just that it doesn't fit.</div></li>
+    </ol>
+    <div class="g-callout g-warning"><div class="g-callout-title">Don't exclude points just because they look odd</div>A point should only be marked anomalous if you have a physical reason — a measurement error, a known fault, or a point beyond the model's range.</div>
+    <h3 class="g-h3">Step 5 — Read off the spring constant</h3>
+    <p class="g-p">With a linear fit, the <strong>Gradient</strong> pill shows the spring constant directly — approximately <strong>k ≈ 50 N m<sup>−1</sup></strong> for the example data. The y-intercept should be close to zero; if not, consider whether there is a systematic error.</p>
+    <div class="g-callout g-tip"><div class="g-callout-title">Max gradient line</div>Toggle on <span class="g-tag g-pink">Max gradient line</span> to draw the steepest line through all error boxes. The difference between this and the best-fit gradient gives the uncertainty in your spring constant.</div>
+    <h3 class="g-h3">Step 6 — Export</h3>
+    <p class="g-p">Click <span class="g-tag">↓ Export image</span>. The PNG includes your axis labels, title, and statistics — ready to paste into your write-up. Save your session with <span class="g-tag">↓ Save data</span> before closing.</p>
+  `,
+  'g-reference': `
+    <div class="g-section-label">Reference</div>
+    <h2 class="g-h2">Trend lines &amp; when to use them</h2>
+    <p class="g-p">Choosing the right trend line matters — fitting a straight line to curved data gives a misleading gradient.</p>
+    <div class="g-feature-grid">
+      <div class="g-feature-card"><h4 class="g-h4">Linear</h4><p class="g-eq">y = mx + c</p><p class="g-fp">Use for straight-line relationships. Examples: Hooke's Law, Ohm's Law, constant acceleration.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">x²</h4><p class="g-eq">y = ax²</p><p class="g-fp">Use when y varies with the square of x. Examples: kinetic energy vs speed, distance vs time (uniform acceleration).</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">1/x</h4><p class="g-eq">y = a/x + c</p><p class="g-fp">Use for inverse relationships. Examples: Boyle's Law (P vs V), resistance vs cross-sectional area.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">Exponential</h4><p class="g-eq">y = ae<sup>bx</sup></p><p class="g-fp">Use when a quantity grows or decays proportionally to itself. Examples: radioactive decay, capacitor discharge.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">Power law</h4><p class="g-eq">y = ax<sup>b</sup></p><p class="g-fp">Use when you suspect a power relationship but don't know the exponent. Example: pendulum period vs length.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">Logarithmic</h4><p class="g-eq">y = a·ln(x) + c</p><p class="g-fp">Use when the rate of change decreases as x increases. Less common — occasionally useful for pH or sound intensity.</p></div>
+    </div>
+    <h3 class="g-h3">Understanding the statistics</h3>
+    <h4 class="g-h4">Gradient</h4>
+    <p class="g-p">For a linear fit, this is the rate of change of y with x — the physical quantity you are measuring. Always check units: if y is in N and x is in m, the gradient is in N m<sup>−1</sup>. If you used a scale factor, Hooke Plotter converts the gradient to SI units automatically.</p>
+    <h4 class="g-h4">y-intercept</h4>
+    <p class="g-p">The value of y when x = 0. Physically it often should be zero — if it isn't, it may indicate a systematic error. Use <span class="g-tag g-pink">Extrapolate to y-intercept</span> to extend the line back to the y-axis.</p>
+    <h4 class="g-h4">Max gradient</h4>
+    <p class="g-p">The steepest line that passes through all error boxes simultaneously. Only appears when uncertainty columns are enabled.</p>
+    <div class="g-callout g-example"><div class="g-callout-title">Example</div>Best-fit gradient = 50.3 N m<sup>−1</sup>, max gradient = 54.1 N m<sup>−1</sup><br>Uncertainty = 54.1 − 50.3 = 3.8 N m<sup>−1</sup><br>So k = (50 ± 4) N m<sup>−1</sup></div>
+    <h3 class="g-h3">Anomalous points</h3>
+    <p class="g-p">A result should only be marked anomalous if there is a clear physical or experimental reason:</p>
+    <ul class="g-ul"><li>A measurement error (misread the ruler, weight slipped)</li><li>The apparatus behaved differently (spring exceeded elastic limit)</li><li>A known fault recorded at the time</li></ul>
+    <p class="g-p" style="margin-top:10px;"><strong>Not acceptable:</strong> <em>"it doesn't fit the line"</em> — that is circular reasoning.</p>
+  `,
+  'g-interface': `
+    <div class="g-section-label">Interface Guide</div>
+    <h2 class="g-h2">Parts of the screen</h2>
+    <h3 class="g-h3">Labels panel</h3>
+    <p class="g-p">Enter your graph title, axis labels, and units. Use <code>^</code> followed by a number for superscripts in any field — <code>s^2</code> displays as s².</p>
+    <p class="g-p">The <strong>×10<sup>n</sup> box</strong> sets a scale factor per axis. Enter <strong>−3</strong> to display values in 10<sup>−3</sup> units. The gradient is given in SI units automatically.</p>
+    <h3 class="g-h3">Trend line</h3>
+    <p class="g-p">Choose the mathematical relationship you expect. See the Reference section for guidance.</p>
+    <h3 class="g-h3">Toggles</h3>
+    <p class="g-p"><span class="g-tag g-pink">± Uncertainty columns</span> — Shows ±x and ±y columns plus global uncertainty inputs (absolute value or %).</p>
+    <p class="g-p"><span class="g-tag g-pink">Extrapolate to y-intercept</span> — Extends the best-fit line back to the y-axis. Linear fits only.</p>
+    <p class="g-p"><span class="g-tag g-pink">Max gradient line</span> — Draws the steepest line through all error boxes. Requires uncertainty columns with data.</p>
+    <h3 class="g-h3">Data table</h3>
+    <p class="g-p">Each row is one data point. Click <span class="g-tag">+ Add row</span> to add a blank row, or <span class="g-tag">Paste data</span> to import from a spreadsheet. The <span class="g-tag g-pink">○</span> button marks a point as anomalous — click again to unmark.</p>
+    <h3 class="g-h3">Statistics</h3>
+    <p class="g-p">The row above the graph shows live statistics. Points shows how many are included and how many are excluded. Gradient and y-intercept only appear for linear fits.</p>
+  `,
+  'g-export': `
+    <div class="g-section-label">Exporting</div>
+    <h2 class="g-h2">Getting your work out</h2>
+    <h3 class="g-h3">Export image</h3>
+    <p class="g-p">Click <span class="g-tag">↓ Export image</span> to download a PNG. The image includes your axis labels, graph title, and statistics above the graph — ready to paste into your write-up.</p>
+    <div class="g-callout g-tip"><div class="g-callout-title">Best practice</div>Set your axis labels, units, and title <em>before</em> exporting — they are baked into the image. Update and re-export if you need to change anything.</div>
+    <h3 class="g-h3">Save &amp; load data</h3>
+    <p class="g-p">Click <span class="g-tag">↓ Save data</span> to download a small <code>.json</code> file with all your data, labels, and settings. To resume, click <span class="g-tag">↑ Load data</span> and select the file — everything restores exactly as you left it.</p>
+    <div class="g-callout g-note"><div class="g-callout-title">Keep your save file safe</div>Save the <code>.json</code> file in your OneDrive, Google Drive, or school network folder alongside your write-up.</div>
+  `
+};
+
+function openGuide() {
+  document.getElementById('guideModal').style.display = 'flex';
+  showGuideSection('g-walkthrough');
+}
+
+function closeGuide() {
+  document.getElementById('guideModal').style.display = 'none';
+}
+
+function showGuideSection(id) {
+  document.getElementById('guideContent').innerHTML = GUIDE_SECTIONS[id] || '';
+  document.querySelectorAll('.gnav-link').forEach(a => {
+    const active = a.dataset.sec === id;
+    a.style.color = active ? 'var(--accent)' : 'var(--muted)';
+    a.style.borderBottomColor = active ? 'var(--accent)' : 'transparent';
+  });
+}
+
+document.getElementById('guideModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeGuide();
+});
+
 for (let i = 0; i < 5; i++) addRow();
 </script>
 </body>
