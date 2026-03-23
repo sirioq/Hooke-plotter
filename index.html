@@ -1315,6 +1315,23 @@ function exportImage() {
   const statsRow = document.getElementById('statsRow');
   const chartCard = document.getElementById('chartCard');
 
+  // Force explicit white backgrounds before screenshotting so CSS variables resolve correctly
+  const origStatsBg = statsRow ? statsRow.style.background : '';
+  const origCardBg = chartCard.style.background;
+  if (statsRow) statsRow.style.background = '#ffffff';
+  chartCard.style.background = '#ffffff';
+
+  // Also force pill backgrounds explicitly
+  const pills = statsRow ? statsRow.querySelectorAll('.pill') : [];
+  const origPillBgs = Array.from(pills).map(p => p.style.background);
+  pills.forEach(p => p.style.background = '#ffffff');
+
+  function restore() {
+    if (statsRow) statsRow.style.background = origStatsBg;
+    chartCard.style.background = origCardBg;
+    pills.forEach((p, i) => p.style.background = origPillBgs[i]);
+  }
+
   // Capture stats pills and chart card separately, then composite
   const captureStats = statsRow
     ? html2canvas(statsRow, {backgroundColor: '#ffffff', scale: SCALE, useCORS: true, logging: false})
@@ -1351,7 +1368,9 @@ function exportImage() {
     a.href = off.toDataURL('image/png');
     a.download = titleRaw.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.png';
     a.click();
+    restore();
   }).catch(() => {
+    restore();
     alert('Screenshot failed — please try again.');
   });
 }
