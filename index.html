@@ -1312,65 +1312,113 @@ function updateChart() {
 function exportImage() {
   if (!chart) return;
   const SCALE = window.devicePixelRatio * 3;
-  const statsRow = document.getElementById('statsRow');
   const chartCard = document.getElementById('chartCard');
 
-  // Force explicit white backgrounds before screenshotting so CSS variables resolve correctly
-  const origStatsBg = statsRow ? statsRow.style.background : '';
-  const origCardBg = chartCard.style.background;
-  if (statsRow) statsRow.style.background = '#ffffff';
-  chartCard.style.background = '#ffffff';
+  // Collect visible stats to draw as pills
+  function stripTags(s) { return s.replace(/<sup>([^<]*)<\/sup>/g, '$1').replace(/<[^>]+>/g, ''); }
+  const statItems = [];
+  const eqVal = document.getElementById('statEq')?.innerHTML || '';
+  if (eqVal && eqVal !== '—') statItems.push({label: 'Equation', val: stripTags(eqVal)});
+  if (document.getElementById('pillGrad').style.display !== 'none')
+    statItems.push({label: 'Gradient', val: stripTags(document.getElementById('statGrad')?.innerHTML || '')});
+  if (document.getElementById('pillIntercept').style.display !== 'none')
+    statItems.push({label: 'y-intercept', val: stripTags(document.getElementById('statIntercept')?.innerHTML || '')});
+  if (document.getElementById('pillMaxGrad').style.display !== 'none')
+    statItems.push({label: 'Max gradient', val: stripTags(document.getElementById('statMaxGrad')?.innerHTML || '')});
 
-  // Also force pill backgrounds explicitly
-  const pills = statsRow ? statsRow.querySelectorAll('.pill') : [];
-  const origPillBgs = Array.from(pills).map(p => p.style.background);
-  pills.forEach(p => p.style.background = '#ffffff');
+  // Use html2canvas only for the chart card (white bg plugin ensures no transparency)
+  html2canvas(chartCard, {
+    backgroundColor: '#ffffff',
+    scale: SCALE,
+    useCORS: true,
+    logging: false,
+  }).then(chartCanvas => {
+    const W = chartCanvas.width;
 
-  function restore() {
-    if (statsRow) statsRow.style.background = origStatsBg;
-    chartCard.style.background = origCardBg;
-    pills.forEach((p, i) => p.style.background = origPillBgs[i]);
-  }
+    // Measure and lay out pills using explicit canvas drawing (no html2canvas for pills)
+    const PILL_H = 36 * SCALE;
+    const PILL_PAD_X = 14 * SCALE;
+    const PILL_GAP = 10 * SCALE;
+    const PILL_MARGIN = 20 * SCALE;
+    const LABEL_SIZE = 11 * SCALE;
+    const VAL_SIZE = 15 * SCALE;
+    const SEP_R = 2 * SCALE;
+    const SEP_GAP = 8 * SCALE;
 
-  // Capture stats pills and chart card separately, then composite
-  const captureStats = statsRow
-    ? html2canvas(statsRow, {backgroundColor: '#ffffff', scale: SCALE, useCORS: true, logging: false})
-    : Promise.resolve(null);
+    // Create offscreen canvas just to measure text
+    const measure = document.createElement('canvas').getContext('2d');
 
-  const captureChart = html2canvas(chartCard, {backgroundColor: '#ffffff', scale: SCALE, useCORS: true, logging: false});
+    const pills = statItems.map(item => {
+      measure.font = `700 ${LABEL_SIZE}px 'DM Sans',sans-serif`;
+      const lw = measure.measureText(item.label.toUpperCase()).width;
+      measure.font = `600 ${VAL_SIZE}px 'DM Sans',sans-serif`;
+      const vw = measure.measureText(item.val).width;
+      const pillW = PILL_PAD_X * 2 + lw + SEP_GAP * 2 + SEP_R * 2 + vw;
+      return { ...item, pillW, lw, vw };
+    });
 
-  Promise.all([captureStats, captureChart]).then(([statsCanvas, chartCanvas]) => {
-    const GAP = Math.round(12 * SCALE);
-    const PAD = Math.round(20 * SCALE);
-    const statsH = statsCanvas ? statsCanvas.height : 0;
-    const totalH = (statsH ? statsH + GAP : 0) + chartCanvas.height + PAD * 2;
-    const totalW = Math.max(chartCanvas.width, statsCanvas ? statsCanvas.width : 0) + PAD * 2;
+    const totalPillW = pills.reduce((s, p) => s + p.pillW, 0) + PILL_GAP * (pills.length - 1);
+    const HEADER = statItems.length ? PILL_H + PILL_MARGIN * 2 : 0;
+    const PAD = Math.round(16 * SCALE);
 
     const off = document.createElement('canvas');
-    off.width = totalW;
-    off.height = totalH;
+    off.width = W + PAD * 2;
+    off.height = HEADER + chartCanvas.height + PAD;
     const ctx = off.getContext('2d');
 
+    // White background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, totalW, totalH);
+    ctx.fillRect(0, 0, off.width, off.height);
 
-    let y = PAD;
-    if (statsCanvas) {
-      // Centre stats horizontally
-      const sx = Math.round((totalW - statsCanvas.width) / 2);
-      ctx.drawImage(statsCanvas, sx, y);
-      y += statsCanvas.height + GAP;
+    // Draw pills
+    if (pills.length) {
+      let px = (off.width - totalPillW) / 2;
+      const py = PILL_MARGIN;
+
+      pills.forEach(pill => {
+        const r = PILL_H / 2;
+
+        // Pill background
+        ctx.fillStyle = '#f8f7f5';
+        ctx.strokeStyle = '#e8e6e1';
+        ctx.lineWidth = SCALE;
+        ctx.beginPath();
+        ctx.roundRect(px, py, pill.pillW, PILL_H, r);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label
+        ctx.font = `700 ${LABEL_SIZE}px 'DM Sans',sans-serif`;
+        ctx.fillStyle = '#9a9189';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pill.label.toUpperCase(), px + PILL_PAD_X, py + PILL_H / 2);
+
+        // Separator dot
+        const sepX = px + PILL_PAD_X + pill.lw + SEP_GAP;
+        ctx.fillStyle = '#d0cdc9';
+        ctx.beginPath();
+        ctx.arc(sepX, py + PILL_H / 2, SEP_R, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Value
+        ctx.font = `600 ${VAL_SIZE}px 'DM Sans',sans-serif`;
+        ctx.fillStyle = '#2c2825';
+        ctx.fillText(pill.val, sepX + SEP_GAP, py + PILL_H / 2);
+
+        px += pill.pillW + PILL_GAP;
+      });
     }
-    ctx.drawImage(chartCanvas, PAD, y);
+
+    // Draw chart below pills
+    ctx.drawImage(chartCanvas, PAD, HEADER);
 
     const titleRaw = document.getElementById('graphTitle').value || 'graph';
     const a = document.createElement('a');
     a.href = off.toDataURL('image/png');
     a.download = titleRaw.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.png';
     a.click();
-    restore();
   }).catch(() => {
-    restore();
     alert('Screenshot failed — please try again.');
   });
 }
