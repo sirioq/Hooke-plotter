@@ -1427,12 +1427,13 @@ function loadData(event) {
 const GUIDE_SECTIONS = {
   'g-walkthrough': `
     <div class="g-section-label">Worked Example</div>
-    <h2 class="g-h2">Plotting a Hooke's Law experiment</h2>
+    <h2 class="g-h2">Extension of a spring against applied force</h2>
     <p class="g-p">This walkthrough takes you through a complete Hooke's Law practical — entering data, adding uncertainties, identifying an anomalous result, and extracting the spring constant.</p>
     <div class="g-callout g-example"><div class="g-callout-title">The experiment</div>A spring is loaded with weights and the extension measured each time. We expect a linear relationship: <strong>F = kx</strong>, where <em>k</em> is the spring constant (gradient of the graph) in N m<sup>−1</sup>.</div>
     <h3 class="g-h3">Step 1 — Set up your axes</h3>
+    <div class="g-callout g-tip"><div class="g-callout-title">Superscripts in labels</div>Use <code>^</code> followed by a number anywhere in a label, title, or units field to create a superscript — for example <code>m^2</code> displays as m², and <code>s^-1</code> displays as s<sup>−1</sup>.</div>
     <ol class="g-steps">
-      <li><div class="g-step-num">1</div><div class="g-step-body"><strong>Enter a graph title.</strong> Use <code>^</code> for superscripts — e.g. <code>m^2</code> becomes m².</div></li>
+      <li><div class="g-step-num">1</div><div class="g-step-body"><strong>Enter a graph title</strong>, for example: <em>Extension of a Spring Against Applied Force</em>.</div></li>
       <li><div class="g-step-num">2</div><div class="g-step-body"><strong>Set the X axis label</strong> to <em>Extension</em> and units to <em>m</em>.</div></li>
       <li><div class="g-step-num">3</div><div class="g-step-body"><strong>Set the Y axis label</strong> to <em>Force</em> and units to <em>N</em>.</div></li>
       <li><div class="g-step-num">4</div><div class="g-step-body"><strong>Leave the trend line as Linear</strong> — Hooke's Law predicts a straight line.</div></li>
@@ -1447,6 +1448,7 @@ const GUIDE_SECTIONS = {
       <li><div class="g-step-num">2</div><div class="g-step-body">Use the global uncertainty boxes that appear. Type <strong>0.001</strong> for X and <strong>0.1</strong> for Y — all rows fill automatically.</div></li>
       <li><div class="g-step-num">3</div><div class="g-step-body">Click any ±x or ±y cell to override the global value for that row.</div></li>
     </ol>
+    <div class="g-callout g-warning"><div class="g-callout-title">Choosing your uncertainty</div>The precision of a millimetre ruler is 1 mm, but the actual uncertainty in this experiment is likely larger. Reading the position of a spring under load is difficult — parallax, the spring swaying, and judging where the marker sits all add to the uncertainty. Think carefully about what value honestly reflects the reliability of your measurements, rather than just using the instrument precision. If you took repeat readings, half the range of those repeats is a good estimate of your uncertainty.</div>
     <div class="g-callout g-note"><div class="g-callout-title">Percentage uncertainties</div>Type <strong>2%</strong> to use a percentage — Hooke Plotter calculates the absolute uncertainty for each point automatically.</div>
     <h3 class="g-h3">Step 4 — Mark the anomalous point</h3>
     <ol class="g-steps">
