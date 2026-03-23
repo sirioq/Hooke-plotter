@@ -436,6 +436,11 @@ input.toggle-cb:disabled + .toggle-btn {
 .g-tag.g-pink { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
 .g-feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
 .g-feature-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.g-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.82rem; }
+.g-table th { background: var(--soft); color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
+.g-table td { padding: 7px 12px; border: 1px solid var(--border); }
+.g-table tr:nth-child(even) td { background: var(--soft); }
+.g-anom-row td { text-decoration: line-through; opacity: 0.5; font-style: italic; }
 </style>
 </head>
 <body>
@@ -1440,7 +1445,19 @@ const GUIDE_SECTIONS = {
     </ol>
     <div class="g-callout g-tip"><div class="g-callout-title">Scale factors</div>If your x values are in GHz, set the ×10<sup>n</sup> box to <strong>9</strong>. The axis reads <em>Frequency / 10⁹ Hz</em> and the gradient is automatically converted to SI units.</div>
     <h3 class="g-h3">Step 2 — Enter your data</h3>
-    <p class="g-p">Enter extension in the X column and force in the Y column.</p>
+    <p class="g-p">Enter extension in the X column and force in the Y column. Here is a sample dataset you can use to follow along:</p>
+    <table class="g-table">
+      <thead><tr><th>Extension / m</th><th>Force / N</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>0.020</td><td>1.0</td><td></td></tr>
+        <tr><td>0.041</td><td>2.0</td><td></td></tr>
+        <tr><td>0.060</td><td>3.0</td><td></td></tr>
+        <tr><td>0.082</td><td>4.0</td><td></td></tr>
+        <tr class="g-anom-row"><td>0.115</td><td>5.0</td><td>anomalous — likely misread of ruler</td></tr>
+        <tr><td>0.119</td><td>6.0</td><td></td></tr>
+        <tr><td>0.140</td><td>7.0</td><td></td></tr>
+      </tbody>
+    </table>
     <div class="g-callout g-tip"><div class="g-callout-title">Paste from a spreadsheet</div>Select two columns in Excel or Google Sheets, copy, then click <span class="g-tag">Paste data</span>. Tab-separated values are read automatically.</div>
     <h3 class="g-h3">Step 3 — Add uncertainties</h3>
     <ol class="g-steps">
@@ -1454,7 +1471,7 @@ const GUIDE_SECTIONS = {
     <ol class="g-steps">
       <li><div class="g-step-num">1</div><div class="g-step-body">Find the suspect row and click the <span class="g-tag g-pink">○</span> button. The row fades and the point is circled on the graph.</div></li>
       <li><div class="g-step-num">2</div><div class="g-step-body">The line of best fit, gradient, and y-intercept <strong>automatically exclude</strong> this point.</div></li>
-      <li><div class="g-step-num">3</div><div class="g-step-body">In your write-up, explain <em>why</em> the point is anomalous — not just that it doesn't fit.</div></li>
+      <li><div class="g-step-num">3</div><div class="g-step-body">In your write-up, explain <em>why</em> the point is anomalous — not just that it doesn't fit. Here, the most likely explanation is a misread of the ruler, since the points either side fall neatly on the line.</div></li>
     </ol>
     <div class="g-callout g-warning"><div class="g-callout-title">Don't exclude points just because they look odd</div>A point should only be marked anomalous if you have a physical reason — a measurement error, a known fault, or a point beyond the model's range.</div>
     <h3 class="g-h3">Step 5 — Read off the spring constant</h3>
