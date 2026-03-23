@@ -1314,17 +1314,30 @@ function exportImage() {
   const SCALE = window.devicePixelRatio * 3;
   const chartCard = document.getElementById('chartCard');
 
-  // Collect visible stats to draw as pills
-  function stripTags(s) { return s.replace(/<sup>([^<]*)<\/sup>/g, '$1').replace(/<[^>]+>/g, ''); }
+  // Parse HTML with <sup> tags into segments for canvas drawing
+  function parseSegs(html) {
+    const segs = [];
+    const re = /<sup>([^<]*)<\/sup>|([^<]+)/g;
+    let m;
+    while ((m = re.exec(html)) !== null)
+      segs.push(m[1] !== undefined ? {t: m[1], sup: true} : {t: m[2], sup: false});
+    return segs;
+  }
+  function htmlToSegs(raw) {
+    // Strip any tags other than <sup>, then parse
+    const clean = raw.replace(/<(?!\/?(sup))[^>]+>/g, '');
+    return parseSegs(clean);
+  }
+
   const statItems = [];
   const eqVal = document.getElementById('statEq')?.innerHTML || '';
-  if (eqVal && eqVal !== '—') statItems.push({label: 'Equation', val: stripTags(eqVal)});
+  if (eqVal && eqVal !== '—') statItems.push({label: 'Equation', segs: htmlToSegs(eqVal)});
   if (document.getElementById('pillGrad').style.display !== 'none')
-    statItems.push({label: 'Gradient', val: stripTags(document.getElementById('statGrad')?.innerHTML || '')});
+    statItems.push({label: 'Gradient', segs: htmlToSegs(document.getElementById('statGrad')?.innerHTML || '')});
   if (document.getElementById('pillIntercept').style.display !== 'none')
-    statItems.push({label: 'y-intercept', val: stripTags(document.getElementById('statIntercept')?.innerHTML || '')});
+    statItems.push({label: 'y-intercept', segs: htmlToSegs(document.getElementById('statIntercept')?.innerHTML || '')});
   if (document.getElementById('pillMaxGrad').style.display !== 'none')
-    statItems.push({label: 'Max gradient', val: stripTags(document.getElementById('statMaxGrad')?.innerHTML || '')});
+    statItems.push({label: 'Max gradient', segs: htmlToSegs(document.getElementById('statMaxGrad')?.innerHTML || '')});
 
   // Use html2canvas only for the chart card (white bg plugin ensures no transparency)
   html2canvas(chartCard, {
@@ -1348,11 +1361,17 @@ function exportImage() {
     // Create offscreen canvas just to measure text
     const measure = document.createElement('canvas').getContext('2d');
 
+    const SUP_SIZE = VAL_SIZE * 0.65;
+    function measureSegs(segs) {
+      return segs.reduce((total, seg) => {
+        measure.font = `600 ${seg.sup ? SUP_SIZE : VAL_SIZE}px 'DM Sans',sans-serif`;
+        return total + measure.measureText(seg.t).width;
+      }, 0);
+    }
     const pills = statItems.map(item => {
       measure.font = `700 ${LABEL_SIZE}px 'DM Sans',sans-serif`;
       const lw = measure.measureText(item.label.toUpperCase()).width;
-      measure.font = `600 ${VAL_SIZE}px 'DM Sans',sans-serif`;
-      const vw = measure.measureText(item.val).width;
+      const vw = measureSegs(item.segs);
       const pillW = PILL_PAD_X * 2 + lw + SEP_GAP * 2 + SEP_R * 2 + vw;
       return { ...item, pillW, lw, vw };
     });
@@ -1401,10 +1420,16 @@ function exportImage() {
         ctx.arc(sepX, py + PILL_H / 2, SEP_R, 0, Math.PI * 2);
         ctx.fill();
 
-        // Value
-        ctx.font = `600 ${VAL_SIZE}px 'DM Sans',sans-serif`;
+        // Value (with superscript support)
         ctx.fillStyle = '#2c2825';
-        ctx.fillText(pill.val, sepX + SEP_GAP, py + PILL_H / 2);
+        ctx.textBaseline = 'middle';
+        let vx = sepX + SEP_GAP;
+        pill.segs.forEach(seg => {
+          ctx.font = `600 ${seg.sup ? SUP_SIZE : VAL_SIZE}px 'DM Sans',sans-serif`;
+          const dy = seg.sup ? -(VAL_SIZE * 0.22) : 0;
+          ctx.fillText(seg.t, vx, py + PILL_H / 2 + dy);
+          vx += ctx.measureText(seg.t).width;
+        });
 
         px += pill.pillW + PILL_GAP;
       });
