@@ -497,16 +497,21 @@ input.toggle-cb:disabled + .toggle-btn {
       <!-- Trend line -->
       <div class="field">
         <label>Trend line</label>
-        <div class="select-wrap">
-          <select id="trendType" onchange="updateChart()">
-            <option value="none">No trend line</option>
-            <option value="linear" selected>Linear</option>
-            <option value="poly2">x²</option>
-            <option value="reciprocal">1/x</option>
-            <option value="exponential">Exponential</option>
-            <option value="power">Power law</option>
-            <option value="logarithmic">Logarithmic</option>
-          </select>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="select-wrap" style="flex:1;">
+            <select id="trendType" onchange="updateChart()">
+              <option value="none">No trend line</option>
+              <option value="linear" selected>Linear</option>
+              <option value="poly2">x²</option>
+              <option value="reciprocal">1/x</option>
+              <option value="exponential">Exponential</option>
+              <option value="power">Power law</option>
+            </select>
+          </div>
+          <label id="expOffsetLabel" style="display:none;align-items:center;gap:5px;font-size:0.76rem;font-weight:500;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;">
+            <input type="checkbox" id="cbExpOffset" onchange="updateChart()" style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;">
+            + c
+          </label>
         </div>
       </div>
 
@@ -531,6 +536,7 @@ input.toggle-cb:disabled + .toggle-btn {
 
         <input class="toggle-cb" type="checkbox" id="cbMaxGrad" onchange="updateChart()">
         <label class="toggle-btn" id="lblMaxGrad" for="cbMaxGrad">Max gradient line</label>
+
       </div>
     </div>
 
@@ -680,6 +686,17 @@ function fmt(v) {
     return `${m} \u00d710<sup>${e}</sup>`;
   }
   return parseFloat(v.toFixed(4)).toString();
+}
+
+// Format a coefficient in front of a variable term:
+// 1 → '' (omit), -1 → '−', 0 → null (caller omits term), 2.0 → '2'
+function fmtCoeff(v) {
+  const tol = 1e-10;
+  if (Math.abs(v) < tol) return null; // signal: omit this term
+  if (Math.abs(v - 1) < tol)  return '';
+  if (Math.abs(v + 1) < tol)  return '\u2212';
+  const s = fmt(v);
+  return s.startsWith('-') ? '\u2212' + s.slice(1) : s;
 }
 
 function linspace(a, b, n) {
@@ -932,38 +949,88 @@ function computeTrend(xs, ys, type) {
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const pts = linspace(xMin, xMax, 200);
   const pm = (v) => v >= 0 ? '+' : '\u2212';
+  const tol = 1e-10;
+
+  // Build equation string: join non-null terms
+  function buildEq(terms) {
+    // terms: array of strings or nulls; first term needs no sign prefix
+    const out = [];
+    terms.forEach((t, i) => {
+      if (t === null || t === undefined) return;
+      out.push(t);
+    });
+    return 'y = ' + (out.length ? out.join(' ') : '0');
+  }
+
+  // Format a +/- term after the first: e.g. '+ 3.2' or '− 1.1'
+  function pmTerm(v, str) {
+    if (Math.abs(v) < tol) return null;
+    return `${pm(v)} ${fmt(Math.abs(v))}${str}`;
+  }
 
   if (type === 'linear') {
     const [c, m] = polyFit(xs, ys, 1);
     const fn = x => m * x + c;
+    const mc = fmtCoeff(m);
+    const eq = mc === null ? `y = ${pm(c)} ${fmt(Math.abs(c))}`
+      : `y = ${mc}x ${pm(c)} ${fmt(Math.abs(c))}`;
     return { pts: pts.map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(m)}x ${pm(c)} ${fmt(Math.abs(c))}`,
-      r2: rSq(xs, ys, fn), slope: m, intercept: c };
+      eq, r2: rSq(xs, ys, fn), slope: m, intercept: c };
   }
+
   if (type === 'poly2') {
-    const co = polyFit(xs, ys, 2);
-    const fn = x => co.reduce((s, c, i) => s + c * x ** i, 0);
+    // Force through origin: y = ax²
+    const n = xs.length;
+    const sumX4 = xs.reduce((s,x) => s + x**4, 0);
+    const sumX2Y = xs.reduce((s,x,i) => s + x**2 * ys[i], 0);
+    const a = sumX2Y / sumX4;
+    const fn = x => a * x ** 2;
+    const ac = fmtCoeff(a);
+    const eq = ac === null ? 'y = 0' : `y = ${ac}x\u00b2`;
     return { pts: pts.map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(co[2])}x\u00b2 ${pm(co[1])} ${fmt(Math.abs(co[1]))}x ${pm(co[0])} ${fmt(Math.abs(co[0]))}`,
-      r2: rSq(xs, ys, fn) };
+      eq, r2: rSq(xs, ys, fn) };
   }
+
   if (type === 'reciprocal') {
+    // Force through origin: y = a/x
     if (xs.some(x => x === 0)) return {pts:[], eq:'X values cannot be zero', r2:null};
-    const [c, a] = polyFit(xs.map(x => 1/x), ys, 1);
-    const fn = x => a / x + c;
+    const invXs = xs.map(x => 1/x);
+    const sumInv2 = invXs.reduce((s,v) => s + v**2, 0);
+    const sumInvY = invXs.reduce((s,v,i) => s + v * ys[i], 0);
+    const a = sumInvY / sumInv2;
+    const fn = x => a / x;
     return { pts: pts.filter(x => x !== 0).map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(a)}/x ${pm(c)} ${fmt(Math.abs(c))}`,
+      eq: `y = ${fmt(a)}/x`,
       r2: rSq(xs, ys, fn) };
   }
+
   if (type === 'exponential') {
-    if (!ys.every(y => y > 0)) return {pts:[], eq:'Needs positive Y values', r2:null};
-    const [lnA, b] = polyFit(xs, ys.map(Math.log), 1);
-    const a = Math.exp(lnA);
-    const fn = x => a * Math.exp(b * x);
-    return { pts: pts.map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(a)}\u00b7e^(${fmt(b)}x)`,
-      r2: rSq(xs, ys, fn) };
+    const withOffset = document.getElementById('cbExpOffset')?.checked;
+    if (withOffset) {
+      // Fit y = a·e^(bx) + c using iterative approach:
+      // estimate c as min(ys)*0.9, then linearise
+      const cEst = Math.min(...ys) * 0.9;
+      const shifted = ys.map(y => y - cEst);
+      if (!shifted.every(v => v > 0)) return {pts:[], eq:'Cannot fit — try without offset', r2:null};
+      const [lnA, b] = polyFit(xs, shifted.map(Math.log), 1);
+      const a = Math.exp(lnA);
+      const c = cEst;
+      const fn = x => a * Math.exp(b * x) + c;
+      const sign = pm(c);
+      return { pts: pts.map(x => ({x, y: fn(x)})),
+        eq: `y = ${fmt(a)}e<sup>${fmt(b)}x</sup> ${sign} ${fmt(Math.abs(c))}`,
+        r2: rSq(xs, ys, fn) };
+    } else {
+      if (!ys.every(y => y > 0)) return {pts:[], eq:'Needs positive Y values', r2:null};
+      const [lnA, b] = polyFit(xs, ys.map(Math.log), 1);
+      const a = Math.exp(lnA);
+      const fn = x => a * Math.exp(b * x);
+      return { pts: pts.map(x => ({x, y: fn(x)})),
+        eq: `y = ${fmt(a)}e<sup>${fmt(b)}x</sup>`,
+        r2: rSq(xs, ys, fn) };
+    }
   }
+
   if (type === 'power') {
     if (!xs.every(x => x > 0) || !ys.every(y => y > 0))
       return {pts:[], eq:'Needs positive X & Y', r2:null};
@@ -971,17 +1038,10 @@ function computeTrend(xs, ys, type) {
     const a = Math.exp(lnA);
     const fn = x => a * x ** b;
     return { pts: pts.filter(x => x > 0).map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(a)}\u00b7x^${fmt(b)}`,
+      eq: `y = ${fmt(a)}x<sup>${fmt(b)}</sup>`,
       r2: rSq(xs, ys, fn) };
   }
-  if (type === 'logarithmic') {
-    if (!xs.every(x => x > 0)) return {pts:[], eq:'Needs positive X values', r2:null};
-    const [c, a] = polyFit(xs.map(Math.log), ys, 1);
-    const fn = x => a * Math.log(x) + c;
-    return { pts: pts.filter(x => x > 0).map(x => ({x, y: fn(x)})),
-      eq: `y = ${fmt(a)}\u00b7ln(x) ${pm(c)} ${fmt(Math.abs(c))}`,
-      r2: rSq(xs, ys, fn) };
-  }
+
   return null;
 }
 
@@ -1022,6 +1082,14 @@ function updateChart() {
   document.getElementById('lblExtrapolate').style.opacity = isLinear ? '1' : '0.35';
   document.getElementById('lblExtrapolate').style.pointerEvents = isLinear ? '' : 'none';
   if (!isLinear) cbExtra.checked = false;
+
+  // Show/hide exponential offset checkbox inline with dropdown
+  const isExp = trend === 'exponential';
+  const expOffsetLabel = document.getElementById('expOffsetLabel');
+  if (expOffsetLabel) {
+    expOffsetLabel.style.display = isExp ? 'flex' : 'none';
+    if (!isExp) document.getElementById('cbExpOffset').checked = false;
+  }
 
   // Split rows into normal and anomalous
   const valid   = rows.filter(r => r.x !== '' && r.y !== '' && !isNaN(+r.x) && !isNaN(+r.y));
@@ -1463,6 +1531,7 @@ function getState() {
     showErrors:    document.getElementById('cbErrors').checked,
     extrapolate:   document.getElementById('cbExtrapolate').checked,
     showMaxGrad:   document.getElementById('cbMaxGrad').checked,
+    expOffset:     document.getElementById('cbExpOffset').checked,
     xUncInput:     document.getElementById('xUncInput').value,
     yUncInput:     document.getElementById('yUncInput').value,
     rows: rows.map(r => ({
@@ -1482,6 +1551,7 @@ function setState(state) {
   chk('cbErrors', state.showErrors);
   chk('cbExtrapolate', state.extrapolate);
   chk('cbMaxGrad', state.showMaxGrad);
+  chk('cbExpOffset', state.expOffset);
   set('xUncInput', state.xUncInput);
   set('yUncInput', state.yUncInput);
   document.getElementById('uncPanel').classList.toggle('open', !!state.showErrors);
@@ -1578,11 +1648,10 @@ const GUIDE_SECTIONS = {
     <p class="g-p">Choosing the right trend line matters — fitting a straight line to curved data gives a misleading gradient.</p>
     <div class="g-feature-grid">
       <div class="g-feature-card"><h4 class="g-h4">Linear</h4><p class="g-eq">y = mx + c</p><p class="g-fp">Use for straight-line relationships. Examples: Hooke's Law, Ohm's Law, constant acceleration.</p></div>
-      <div class="g-feature-card"><h4 class="g-h4">x²</h4><p class="g-eq">y = ax²</p><p class="g-fp">Use when y varies with the square of x. Examples: kinetic energy vs speed, distance vs time (uniform acceleration).</p></div>
-      <div class="g-feature-card"><h4 class="g-h4">1/x</h4><p class="g-eq">y = a/x + c</p><p class="g-fp">Use for inverse relationships. Examples: Boyle's Law (P vs V), resistance vs cross-sectional area.</p></div>
-      <div class="g-feature-card"><h4 class="g-h4">Exponential</h4><p class="g-eq">y = ae<sup>bx</sup></p><p class="g-fp">Use when a quantity grows or decays proportionally to itself. Examples: radioactive decay, capacitor discharge.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">x²</h4><p class="g-eq">y = ax²</p><p class="g-fp">Use when y varies with the square of x and the relationship passes through the origin. Examples: kinetic energy vs speed, distance vs time for uniform acceleration.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">1/x</h4><p class="g-eq">y = a/x</p><p class="g-fp">Use for inverse relationships through the origin. Examples: Boyle's Law (P vs V), resistance vs cross-sectional area.</p></div>
+      <div class="g-feature-card"><h4 class="g-h4">Exponential</h4><p class="g-eq">y = ae<sup>bx</sup></p><p class="g-fp">Use when a quantity grows or decays proportionally to itself. Examples: radioactive decay, capacitor discharge. Enable the <strong>+ c</strong> checkbox next to the dropdown when there is a background offset — for example, background radiation in a decay experiment.</p></div>
       <div class="g-feature-card"><h4 class="g-h4">Power law</h4><p class="g-eq">y = ax<sup>b</sup></p><p class="g-fp">Use when you suspect a power relationship but don't know the exponent. Example: pendulum period vs length.</p></div>
-      <div class="g-feature-card"><h4 class="g-h4">Logarithmic</h4><p class="g-eq">y = a·ln(x) + c</p><p class="g-fp">Use when the rate of change decreases as x increases. Less common — occasionally useful for pH or sound intensity.</p></div>
     </div>
     <h3 class="g-h3">Understanding the statistics</h3>
     <h4 class="g-h4">Gradient</h4>
