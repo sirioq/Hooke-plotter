@@ -166,6 +166,11 @@ input.toggle-cb:disabled + .toggle-btn {
   opacity: 0.35;
   pointer-events: none;
 }
+/* Exp offset inline checkbox label — pink when active */
+#expOffsetLabel.active {
+  color: var(--accent);
+  font-weight: 600;
+}
 
 /* Global uncertainty sub-panel */
 .unc-panel {
@@ -509,7 +514,7 @@ input.toggle-cb:disabled + .toggle-btn {
             </select>
           </div>
           <label id="expOffsetLabel" style="display:none;align-items:center;gap:5px;font-size:0.76rem;font-weight:500;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;">
-            <input type="checkbox" id="cbExpOffset" onchange="updateChart()" style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;">
+            <input type="checkbox" id="cbExpOffset" onchange="this.parentElement.classList.toggle('active',this.checked);updateChart();" style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;">
             + c
           </label>
         </div>
@@ -536,6 +541,9 @@ input.toggle-cb:disabled + .toggle-btn {
 
         <input class="toggle-cb" type="checkbox" id="cbMaxGrad" onchange="updateChart()">
         <label class="toggle-btn" id="lblMaxGrad" for="cbMaxGrad">Max gradient line</label>
+
+        <input class="toggle-cb" type="checkbox" id="cbOrigin" onchange="updateChart()">
+        <label class="toggle-btn" for="cbOrigin">Include origin</label>
 
       </div>
     </div>
@@ -1007,19 +1015,27 @@ function computeTrend(xs, ys, type) {
   if (type === 'exponential') {
     const withOffset = document.getElementById('cbExpOffset')?.checked;
     if (withOffset) {
-      // Fit y = a·e^(bx) + c using iterative approach:
-      // estimate c as min(ys)*0.9, then linearise
-      const cEst = Math.min(...ys) * 0.9;
-      const shifted = ys.map(y => y - cEst);
-      if (!shifted.every(v => v > 0)) return {pts:[], eq:'Cannot fit — try without offset', r2:null};
-      const [lnA, b] = polyFit(xs, shifted.map(Math.log), 1);
-      const a = Math.exp(lnA);
-      const c = cEst;
-      const fn = x => a * Math.exp(b * x) + c;
-      const sign = pm(c);
+      // Fit y = ae^(bx) + c using grid search on c, linearising for each candidate
+      const yMin = Math.min(...ys);
+      const yMax = Math.max(...ys);
+      let bestR2 = -Infinity, bestA, bestB, bestC;
+      const steps = 60;
+      for (let i = 1; i < steps; i++) {
+        const cTry = yMin * i / steps; // try c from near-zero up to just below min(y)
+        const shifted = ys.map(y => y - cTry);
+        if (!shifted.every(v => v > 0)) continue;
+        const [lnA, b] = polyFit(xs, shifted.map(Math.log), 1);
+        const a = Math.exp(lnA);
+        const fn = x => a * Math.exp(b * x) + cTry;
+        const r2val = rSq(xs, ys, fn);
+        if (r2val > bestR2) { bestR2 = r2val; bestA = a; bestB = b; bestC = cTry; }
+      }
+      if (bestA === undefined) return {pts:[], eq:'Cannot fit — check data', r2:null};
+      const fn = x => bestA * Math.exp(bestB * x) + bestC;
+      const sign = pm(bestC);
       return { pts: pts.map(x => ({x, y: fn(x)})),
-        eq: `y = ${fmt(a)}e<sup>${fmt(b)}x</sup> ${sign} ${fmt(Math.abs(c))}`,
-        r2: rSq(xs, ys, fn) };
+        eq: `y = ${fmt(bestA)}e<sup>${fmt(bestB)}x</sup> ${sign} ${fmt(Math.abs(bestC))}`,
+        r2: bestR2 };
     } else {
       if (!ys.every(y => y > 0)) return {pts:[], eq:'Needs positive Y values', r2:null};
       const [lnA, b] = polyFit(xs, ys.map(Math.log), 1);
@@ -1077,8 +1093,9 @@ function updateChart() {
 
   // Extrapolate toggle — only enabled for linear
   const isLinear = trend === 'linear';
-  const cbExtra = document.getElementById('cbExtrapolate');
-  const cbMaxG  = document.getElementById('cbMaxGrad');
+  const cbExtra  = document.getElementById('cbExtrapolate');
+  const cbMaxG   = document.getElementById('cbMaxGrad');
+  const cbOrigin = document.getElementById('cbOrigin')?.checked;
   document.getElementById('lblExtrapolate').style.opacity = isLinear ? '1' : '0.35';
   document.getElementById('lblExtrapolate').style.pointerEvents = isLinear ? '' : 'none';
   if (!isLinear) cbExtra.checked = false;
@@ -1363,13 +1380,19 @@ function updateChart() {
           grid: {color: '#f0ede9'},
           ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
           border: {color: '#e8e6e1'},
-          ...(cbExtra.checked ? {min: Math.min(0, ...normalPts.map(p => p.x))} : {}),
+          ...((() => {
+            const allX = [...normalPts.map(p => p.x), ...(extraPts||[]).map(p => p.x), ...(trendPts||[]).map(p => p.x)];
+            const xMin = cbOrigin ? Math.min(0, ...allX) : undefined;
+            const xMax = cbExtra.checked ? Math.max(...allX) : undefined;
+            return { ...(xMin !== undefined ? {min: xMin} : {}), ...(xMax !== undefined ? {max: xMax} : {}) };
+          })()),
         },
         y: {
           title: {display: false},
           grid: {color: '#f0ede9'},
           ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
           border: {color: '#e8e6e1'},
+          ...(cbOrigin ? {min: Math.min(0, ...normalPts.map(p => p.y), ...(trendPts||[]).map(p => p.y), ...(extraPts||[]).map(p => p.y))} : {}),
         }
       }
     }
@@ -1531,6 +1554,7 @@ function getState() {
     showErrors:    document.getElementById('cbErrors').checked,
     extrapolate:   document.getElementById('cbExtrapolate').checked,
     showMaxGrad:   document.getElementById('cbMaxGrad').checked,
+    includeOrigin: document.getElementById('cbOrigin').checked,
     expOffset:     document.getElementById('cbExpOffset').checked,
     xUncInput:     document.getElementById('xUncInput').value,
     yUncInput:     document.getElementById('yUncInput').value,
@@ -1551,7 +1575,9 @@ function setState(state) {
   chk('cbErrors', state.showErrors);
   chk('cbExtrapolate', state.extrapolate);
   chk('cbMaxGrad', state.showMaxGrad);
+  chk('cbOrigin', state.includeOrigin);
   chk('cbExpOffset', state.expOffset);
+  const _cb = document.getElementById('cbExpOffset'); if (_cb) document.getElementById('expOffsetLabel').classList.toggle('active', !!state.expOffset);
   set('xUncInput', state.xUncInput);
   set('yUncInput', state.yUncInput);
   document.getElementById('uncPanel').classList.toggle('open', !!state.showErrors);
@@ -1678,6 +1704,7 @@ const GUIDE_SECTIONS = {
     <p class="g-p"><span class="g-tag g-pink">± Uncertainty columns</span> — Shows ±x and ±y columns plus global uncertainty inputs (absolute value or %).</p>
     <p class="g-p"><span class="g-tag g-pink">Extrapolate to y-intercept</span> — Extends the best-fit line back to the y-axis. Linear fits only.</p>
     <p class="g-p"><span class="g-tag g-pink">Max gradient line</span> — Draws the steepest line through all error boxes. Requires uncertainty columns with data.</p>
+    <p class="g-p"><span class="g-tag g-pink">Include origin</span> — Ensures the origin (0, 0) is always visible on the graph, even if your data starts some distance away. Works with all trend types. The axis can still extend below zero if the data or trend line requires it.</p>
     <h3 class="g-h3">Data table</h3>
     <p class="g-p">Each row is one data point. Click <span class="g-tag">+ Add row</span> to add a blank row, or <span class="g-tag">Paste data</span> to import from a spreadsheet. The <span class="g-tag g-pink">○</span> button marks a point as anomalous — click again to unmark.</p>
     <h3 class="g-h3">Statistics</h3>
