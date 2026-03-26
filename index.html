@@ -166,11 +166,7 @@ input.toggle-cb:disabled + .toggle-btn {
   opacity: 0.35;
   pointer-events: none;
 }
-/* Exp offset inline checkbox label — pink when active */
-#expOffsetLabel.active {
-  color: var(--accent);
-  font-weight: 600;
-}
+
 
 /* Global uncertainty sub-panel */
 .unc-panel {
@@ -513,10 +509,11 @@ input.toggle-cb:disabled + .toggle-btn {
               <option value="power">Power law</option>
             </select>
           </div>
-          <label id="expOffsetLabel" style="display:none;align-items:center;gap:5px;font-size:0.76rem;font-weight:500;color:var(--muted);white-space:nowrap;cursor:pointer;flex-shrink:0;">
-            <input type="checkbox" id="cbExpOffset" onchange="this.parentElement.classList.toggle('active',this.checked);updateChart();" style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;">
-            + c
-          </label>
+          <div id="expOffsetLabel" style="display:none;align-items:center;gap:6px;flex-shrink:0;cursor:pointer;" onclick="document.getElementById('cbExpOffset').click();">
+            <input type="checkbox" id="cbExpOffset" onchange="syncExpOffset();updateChart();" style="display:none;">
+            <span id="expOffsetBox" style="width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;font-size:9px;color:white;"></span>
+            <span style="font-size:0.76rem;font-weight:500;color:var(--muted);white-space:nowrap;">+ c</span>
+          </div>
         </div>
       </div>
 
@@ -1105,7 +1102,7 @@ function updateChart() {
   const expOffsetLabel = document.getElementById('expOffsetLabel');
   if (expOffsetLabel) {
     expOffsetLabel.style.display = isExp ? 'flex' : 'none';
-    if (!isExp) document.getElementById('cbExpOffset').checked = false;
+    if (!isExp) { document.getElementById('cbExpOffset').checked = false; syncExpOffset(); }
   }
 
   // Split rows into normal and anomalous
@@ -1577,7 +1574,7 @@ function setState(state) {
   chk('cbMaxGrad', state.showMaxGrad);
   chk('cbOrigin', state.includeOrigin);
   chk('cbExpOffset', state.expOffset);
-  const _cb = document.getElementById('cbExpOffset'); if (_cb) document.getElementById('expOffsetLabel').classList.toggle('active', !!state.expOffset);
+  syncExpOffset();
   set('xUncInput', state.xUncInput);
   set('yUncInput', state.yUncInput);
   document.getElementById('uncPanel').classList.toggle('open', !!state.showErrors);
@@ -1743,6 +1740,21 @@ function showGuideSection(id) {
 document.getElementById('guideModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeGuide();
 });
+
+function syncExpOffset() {
+  const cb = document.getElementById('cbExpOffset');
+  const box = document.getElementById('expOffsetBox');
+  if (!cb || !box) return;
+  if (cb.checked) {
+    box.style.background = '#f77e9d';
+    box.style.borderColor = '#f77e9d';
+    box.textContent = '✓';
+  } else {
+    box.style.background = 'var(--soft)';
+    box.style.borderColor = 'var(--border)';
+    box.textContent = '';
+  }
+}
 
 for (let i = 0; i < 5; i++) addRow();
 </script>
