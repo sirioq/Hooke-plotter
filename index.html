@@ -1178,8 +1178,9 @@ function updateChart() {
     let mHi = -Infinity;
     for (const a of errBars) for (const b of errBars) {
       const dxa=a.dx??0, dya=a.dy??0, dxb=b.dx??0, dyb=b.dy??0;
-      for (const sa of [-1,1]) for (const sb of [-1,1]) for (const sy of [-1,1]) {
-        const ax=a.x+sa*dxa, ay=a.y+sy*dya, bx=b.x+sb*dxb, by=b.y+sy*dyb;
+      for (const sxa of [-1,1]) for (const sya of [-1,1])
+      for (const sxb of [-1,1]) for (const syb of [-1,1]) {
+        const ax=a.x+sxa*dxa, ay=a.y+sya*dya, bx=b.x+sxb*dxb, by=b.y+syb*dyb;
         if (bx !== ax) mHi = Math.max(mHi, (by - ay) / (bx - ax));
       }
     }
