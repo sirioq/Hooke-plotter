@@ -1315,7 +1315,7 @@ function updateChart() {
         drawSegments(titleHTML, left + (right - left) / 2, top - 14, 0, 22, '#2c2825', "'DM Serif Display',serif");
       }
 
-      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + 40, 0, 14, '#4a4642');
+      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + 44, 0, 14, '#4a4642');
       drawSegments(yLabelHTML, left - 40, top + (bottom - top) / 2, -Math.PI / 2, 14, '#4a4642');
 
       // Draw circles around anomalous points
@@ -1347,7 +1347,7 @@ function updateChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: {duration: 200},
-      layout: {padding: {bottom: 14, left: 40, top: 48}},
+      layout: {padding: {bottom: 22, left: 40, top: 48}},
       plugins: {
         legend: {display: false},
         title: {display: false},
