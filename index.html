@@ -409,6 +409,29 @@ input.toggle-cb:disabled + .toggle-btn {
 </style>
 
 <style>
+/* ── Landscape iPad / small height fix ── */
+@media (max-height: 820px) {
+  .panel { padding: 10px 16px; }
+  .panel-title { margin-bottom: 8px; }
+  .field { margin-bottom: 6px; }
+  .toggle-group { gap: 4px; }
+  .toggle-btn { padding: 5px 10px; font-size: 0.75rem; }
+  .unc-panel { padding: 7px 8px; gap: 4px; }
+  .data-panel { padding: 10px 16px; }
+  .row-actions { margin-top: 7px; gap: 4px; }
+  .btn { padding: 5px 10px; font-size: 0.75rem; }
+}
+
+@media (max-height: 650px) {
+  .panel { padding: 7px 14px; }
+  .panel-title { margin-bottom: 6px; font-size: 0.6rem; }
+  .field label { font-size: 0.68rem; margin-bottom: 2px; }
+  .field input, .field select { padding: 5px 8px; font-size: 0.8rem; }
+  .toggle-btn { padding: 4px 10px; font-size: 0.72rem; }
+  .data-panel { padding: 7px 14px; }
+  .data-row input[type=number] { padding: 4px 5px; font-size: 0.76rem; }
+}
+
 /* ── Guide modal content styles ── */
 #guideContent { font-family: 'DM Sans', sans-serif; color: var(--text); }
 .g-section-label { font-size: 0.63rem; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
