@@ -1333,13 +1333,16 @@ function updateChart() {
         ctx.restore();
       }
 
-      // Graph title — DM Serif Display
+      // Graph title and axis labels — use same sizes as computed at chart creation
+      // Read from chart.options to stay in sync (Chart.js stores them after creation)
+      const _cw2 = chart.canvas.clientWidth || (chart.width / (window.devicePixelRatio||1));
+      const titleSize = Math.max(13, Math.round(_cw2 * 0.022));
+      const axisLabelSize = Math.max(10, Math.round(_cw2 * 0.016));
       if (titleHTML) {
-        drawSegments(titleHTML, left + (right - left) / 2, top - 14, 0, 22, '#2c2825', "'DM Serif Display',serif");
+        drawSegments(titleHTML, left + (right - left) / 2, top - Math.round(titleSize * 0.8), 0, titleSize, '#2c2825', "'DM Serif Display',serif");
       }
-
-      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + 44, 0, 14, '#4a4642');
-      drawSegments(yLabelHTML, left - 40, top + (bottom - top) / 2, -Math.PI / 2, 14, '#4a4642');
+      drawSegments(xLabelHTML, left + (right - left) / 2, bottom + Math.round(axisLabelSize * 3.0), 0, axisLabelSize, '#4a4642');
+      drawSegments(yLabelHTML, left - Math.round(axisLabelSize * 3.0), top + (bottom - top) / 2, -Math.PI / 2, axisLabelSize, '#4a4642');
 
       // Draw circles around anomalous points
       if (anomalyPts.length) {
@@ -1362,6 +1365,12 @@ function updateChart() {
   if (!hasAny) return;
 
 
+  // ── Unified font sizing — everything derived from clientWidth ──
+  const _cw   = document.getElementById('myChart').clientWidth || 600;
+  const _tick  = Math.max(9,  Math.round(_cw * 0.014));
+  const _axis  = Math.max(10, Math.round(_cw * 0.016));
+  const _title = Math.max(13, Math.round(_cw * 0.022));
+
   chart = new Chart(document.getElementById('myChart').getContext('2d'), {
     type: 'scatter',
     data: {datasets},
@@ -1369,8 +1378,12 @@ function updateChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: {duration: 200},
-      layout: {padding: {bottom: 22, left: 40, top: 48}},
+      animation: {duration: 0},
+      layout: {padding: {
+        bottom: Math.round(_axis * 3.5),
+        left:   Math.round(_axis * 3.5),
+        top:    Math.round(_title * 2.2),
+      }},
       plugins: {
         legend: {display: false},
         title: {display: false},
@@ -1378,8 +1391,8 @@ function updateChart() {
         tooltip: {
           backgroundColor: 'white', borderColor: '#e8e6e1', borderWidth: 1,
           titleColor: '#9a9189', bodyColor: '#2c2825',
-          titleFont: {family: 'DM Sans', size: 10, weight: '500'},
-          bodyFont: {family: 'DM Sans', size: 12, weight: '500'},
+          titleFont: {family: 'DM Sans', size: _tick, weight: '500'},
+          bodyFont: {family: 'DM Sans', size: _tick, weight: '500'},
           padding: 10, cornerRadius: 8,
           callbacks: {
             label(ctx) {
@@ -1399,7 +1412,7 @@ function updateChart() {
         x: {
           title: {display: false},
           grid: {color: '#f0ede9'},
-          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
+          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: _tick}},
           border: {color: '#e8e6e1'},
           ...((() => {
             const allX = [...normalPts.map(p => p.x), ...(extraPts||[]).map(p => p.x), ...(trendPts||[]).map(p => p.x)];
@@ -1411,7 +1424,7 @@ function updateChart() {
         y: {
           title: {display: false},
           grid: {color: '#f0ede9'},
-          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: 11}},
+          ticks: {color: '#4a4642', font: {family: 'DM Sans', size: _tick}},
           border: {color: '#e8e6e1'},
           ...(cbOrigin ? {min: Math.min(0, ...normalPts.map(p => p.y), ...(trendPts||[]).map(p => p.y), ...(extraPts||[]).map(p => p.y))} : {}),
         }
@@ -1423,7 +1436,12 @@ function updateChart() {
 // ── Export image ───────────────────────────────────────────────────────
 function exportImage() {
   if (!chart) return;
-  const SCALE = window.devicePixelRatio * 3;
+  // SCALE derived from clientWidth — same reference as title/axis label sizing
+  const _chartEl = document.getElementById('myChart');
+  const _exportCW = _chartEl.clientWidth || 600;
+  // Use canvas physical/CSS ratio as base, so pills match rendered canvas resolution
+  const _dpr = _chartEl.width / (_exportCW);
+  const SCALE = _dpr;
   const chartCard = document.getElementById('chartCard');
 
   // Parse HTML with <sup> tags into segments for canvas drawing
@@ -1451,24 +1469,23 @@ function exportImage() {
   if (document.getElementById('pillMaxGrad').style.display !== 'none')
     statItems.push({label: 'Max gradient', segs: htmlToSegs(document.getElementById('statMaxGrad')?.innerHTML || '')});
 
-  // Use html2canvas only for the chart card (white bg plugin ensures no transparency)
-  html2canvas(chartCard, {
-    backgroundColor: '#ffffff',
-    scale: SCALE,
-    useCORS: true,
-    logging: false,
-  }).then(chartCanvas => {
-    const W = chartCanvas.width;
+  // Use the chart canvas directly — crisp native resolution, no html2canvas softness
+  const chartCanvas = document.getElementById('myChart');
+  const W = chartCanvas.width;
 
-    // Measure and lay out pills using explicit canvas drawing (no html2canvas for pills)
-    const PILL_H = 36 * SCALE;
-    const PILL_PAD_X = 14 * SCALE;
-    const PILL_GAP = 10 * SCALE;
-    const PILL_MARGIN = 20 * SCALE;
-    const LABEL_SIZE = 11 * SCALE;
-    const VAL_SIZE = 15 * SCALE;
-    const SEP_R = 2 * SCALE;
-    const SEP_GAP = 8 * SCALE;
+  // Pill font sizes match axis label sizes — derived from same clientWidth formula
+  const _pAxis  = Math.max(10, Math.round(_exportCW * 0.016)) * _dpr;
+  const _pTitle = Math.max(13, Math.round(_exportCW * 0.022)) * _dpr;
+  const LABEL_SIZE = Math.round(_pAxis * 0.75);
+  const VAL_SIZE   = Math.round(_pAxis * 1.05);
+  const PILL_H     = Math.round(VAL_SIZE * 2.4);
+  const PILL_PAD_X = Math.round(VAL_SIZE * 0.9);
+  const PILL_GAP   = Math.round(VAL_SIZE * 0.65);
+  const PILL_MARGIN = Math.round(PILL_H * 0.55);
+  const SEP_R = Math.round(VAL_SIZE * 0.14);
+  const SEP_GAP = Math.round(VAL_SIZE * 0.5);
+
+  (() => {
 
     // Create offscreen canvas just to measure text
     const measure = document.createElement('canvas').getContext('2d');
@@ -1555,9 +1572,7 @@ function exportImage() {
     a.href = off.toDataURL('image/png');
     a.download = titleRaw.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.png';
     a.click();
-  }).catch(() => {
-    alert('Screenshot failed — please try again.');
-  });
+  })();
 }
 
 
@@ -1779,6 +1794,20 @@ function syncExpOffset() {
     box.textContent = '';
   }
 }
+
+// Redraw chart on resize/zoom — chart.resize() is not reliable enough,
+// so we debounce a full updateChart() call instead
+let resizeTimer = null;
+const chartCardEl = document.getElementById('chartCard');
+function onResize() {
+  if (!chart) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { updateChart(); }, 150);
+}
+if (chartCardEl && window.ResizeObserver) {
+  new ResizeObserver(onResize).observe(chartCardEl);
+}
+window.addEventListener('resize', onResize);
 
 for (let i = 0; i < 5; i++) addRow();
 </script>
