@@ -311,7 +311,7 @@ input.toggle-cb:disabled + .toggle-btn {
 .export-row { display: flex; gap: 6px; flex-shrink: 0; }
 
 .chart-card {
-  flex: 1; background: var(--white);
+  flex: 1; min-width: 400px; background: var(--white);
   border: 1px solid var(--border);
   border-radius: 14px; padding: 16px;
   box-shadow: var(--shadow-md);
@@ -699,6 +699,9 @@ input.toggle-cb:disabled + .toggle-btn {
 // ── State ──────────────────────────────────────────────────────────────
 let chart = null;
 let rows  = [];
+
+// Cache of last chart render state — used by exportImage()
+let _exportState = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────
 function sup(str) {
@@ -1371,6 +1374,22 @@ function updateChart() {
   const _axis  = Math.max(10, Math.round(_cw * 0.016));
   const _title = Math.max(13, Math.round(_cw * 0.022));
 
+  // Cache everything exportImage needs
+  _exportState = {
+    datasets: JSON.parse(JSON.stringify(datasets.map(d => ({...d, data: d.data})))),
+    xLabelHTML, yLabelHTML, titleHTML, eq,
+    errBars: errBars.map(e => ({...e})),
+    normalPts: normalPts.map(p => ({...p})),
+    anomalyPts: anomalyPts.map(p => ({...p})),
+    trendPts: trendPts ? trendPts.map(p => ({...p})) : null,
+    extraPts: extraPts ? extraPts.map(p => ({...p})) : null,
+    maxGradPts: maxGradPts ? maxGradPts.map(p => ({...p})) : null,
+    cbExtraChecked: cbExtra.checked,
+    cbOriginChecked: cbOrigin,
+    xMin: cbOrigin ? Math.min(0, ...normalPts.map(p=>p.x), ...(trendPts||[]).map(p=>p.x), ...(extraPts||[]).map(p=>p.x)) : undefined,
+    yMin: cbOrigin ? Math.min(0, ...normalPts.map(p=>p.y), ...(trendPts||[]).map(p=>p.y), ...(extraPts||[]).map(p=>p.y)) : undefined,
+  };
+
   chart = new Chart(document.getElementById('myChart').getContext('2d'), {
     type: 'scatter',
     data: {datasets},
@@ -1416,9 +1435,9 @@ function updateChart() {
           border: {color: '#e8e6e1'},
           ...((() => {
             const allX = [...normalPts.map(p => p.x), ...(extraPts||[]).map(p => p.x), ...(trendPts||[]).map(p => p.x)];
-            const xMin = cbOrigin ? Math.min(0, ...allX) : undefined;
-            const xMax = cbExtra.checked ? Math.max(...allX) : undefined;
-            return { ...(xMin !== undefined ? {min: xMin} : {}), ...(xMax !== undefined ? {max: xMax} : {}) };
+            const xMin = cbOrigin ? Math.min(0, ...allX) : (cbExtra.checked ? 0 : undefined);
+            // Never set xMax — let Chart.js choose nice round tick values automatically
+            return { ...(xMin !== undefined ? {min: xMin} : {}) };
           })()),
         },
         y: {
@@ -1433,146 +1452,218 @@ function updateChart() {
   });
 }
 
-// ── Export image ───────────────────────────────────────────────────────
+// ── Export SVG ────────────────────────────────────────────────────────
 function exportImage() {
-  if (!chart) return;
-  // SCALE derived from clientWidth — same reference as title/axis label sizing
-  const _chartEl = document.getElementById('myChart');
-  const _exportCW = _chartEl.clientWidth || 600;
-  // Use canvas physical/CSS ratio as base, so pills match rendered canvas resolution
-  const _dpr = _chartEl.width / (_exportCW);
-  const SCALE = _dpr;
-  const chartCard = document.getElementById('chartCard');
+  if (!chart || !_exportState) return;
+  const S = _exportState;
 
-  // Parse HTML with <sup> tags into segments for canvas drawing
-  function parseSegs(html) {
-    const segs = [];
-    const re = /<sup>([^<]*)<\/sup>|([^<]+)/g;
-    let m;
-    while ((m = re.exec(html)) !== null)
-      segs.push(m[1] !== undefined ? {t: m[1], sup: true} : {t: m[2], sup: false});
-    return segs;
+  // ── Fixed SVG dimensions ──
+  const SVG_W = 800;
+  const PAD_L = 72, PAD_R = 24, PAD_T = 76, PAD_B = 48;
+  const PLOT_W = SVG_W - PAD_L - PAD_R;
+  const PLOT_H = Math.round(PLOT_W * 0.62);
+  const SVG_H_CHART = PAD_T + PLOT_H + PAD_B;
+
+  // ── Read tick values from live chart (zoom-independent numbers) ──
+  const xTicks = chart.scales.x.ticks.map(t => ({val: t.value, lbl: t.label}));
+  const yTicks = chart.scales.y.ticks.map(t => ({val: t.value, lbl: t.label}));
+  const xMin = chart.scales.x.min, xMax = chart.scales.x.max;
+  const yMin = chart.scales.y.min, yMax = chart.scales.y.max;
+  const xRange = xMax - xMin, yRange = yMax - yMin;
+
+  // ── Coordinate mappers ──
+  function mx(v) { return PAD_L + (v - xMin) / xRange * PLOT_W; }
+  function my(v) { return PAD_T + (1 - (v - yMin) / yRange) * PLOT_H; }
+
+  // ── Helper: escape XML ──
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── Helper: convert <sup> HTML to SVG tspan superscripts ──
+  function htmlToSVG(html) {
+    // First convert <sup> to SVG tspan, then strip any remaining HTML tags (but not tspan)
+    // Use baseline-shift for superscript — avoids dy accumulation issues
+    return html
+      .replace(/&/g,'&amp;')
+      .replace(/<sup>([^<]*)<\/sup>/g, '¶TSPAN baseline-shift="super" font-size="0.65em"¶$1¶/TSPAN¶')
+      .replace(/<[^>]+>/g,'')
+      .replace(/¶TSPAN ([^¶]*)¶/g,'<tspan $1>')
+      .replace(/¶\/TSPAN¶/g,'</tspan>');
   }
-  function htmlToSegs(raw) {
-    // Strip any tags other than <sup>, then parse
-    const clean = raw.replace(/<(?!\/?(sup))[^>]+>/g, '');
-    return parseSegs(clean);
+
+  // ── Helper: strip to plain text ──
+  function plain(html) { return html.replace(/<sup>([^<]*)<\/sup>/g,'$1').replace(/<[^>]+>/g,''); }
+
+  // ── Build SVG parts ──
+  let svg = '';
+
+  // Grid lines
+  xTicks.forEach(t => {
+    const x = mx(t.val);
+    svg += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T+PLOT_H}" stroke="#f0ede9" stroke-width="1"/>`;
+  });
+  yTicks.forEach(t => {
+    const y = my(t.val);
+    svg += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${PAD_L+PLOT_W}" y2="${y.toFixed(1)}" stroke="#f0ede9" stroke-width="1"/>`;
+  });
+
+  // Plot border
+  svg += `<rect x="${PAD_L}" y="${PAD_T}" width="${PLOT_W}" height="${PLOT_H}" fill="none" stroke="#e8e6e1" stroke-width="1"/>`;
+
+  // X tick labels
+  xTicks.forEach(t => {
+    const x = mx(t.val);
+    svg += `<text x="${x.toFixed(1)}" y="${PAD_T+PLOT_H+16}" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="11" fill="#4a4642">${esc(t.lbl)}</text>`;
+  });
+
+  // Y tick labels
+  yTicks.forEach(t => {
+    const y = my(t.val);
+    svg += `<text x="${PAD_L-6}" y="${y.toFixed(1)}" text-anchor="end" dominant-baseline="middle" font-family="DM Sans,sans-serif" font-size="11" fill="#4a4642">${esc(t.lbl)}</text>`;
+  });
+
+  // X axis label
+  const xLabelPlain = plain(S.xLabelHTML);
+  svg += `<text x="${(PAD_L+PLOT_W/2).toFixed(1)}" y="${SVG_H_CHART-6}" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="13" fill="#4a4642">${htmlToSVG(S.xLabelHTML)}</text>`;
+
+  // Y axis label (rotated)
+  const yLabelPlain = plain(S.yLabelHTML);
+  svg += `<text transform="rotate(-90)" x="${-(PAD_T+PLOT_H/2).toFixed(1)}" y="24" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="13" fill="#4a4642">${htmlToSVG(S.yLabelHTML)}</text>`;
+
+  // Title
+  if (S.titleHTML) {
+    svg += `<text x="${(PAD_L+PLOT_W/2).toFixed(1)}" y="${PAD_T-18}" text-anchor="middle" font-family="DM Serif Display,serif" font-size="24" fill="#2c2825">${htmlToSVG(S.titleHTML)}</text>`;
   }
 
-  const statItems = [];
-  const eqVal = document.getElementById('statEq')?.innerHTML || '';
-  if (eqVal && eqVal !== '—') statItems.push({label: 'Equation', segs: htmlToSegs(eqVal)});
-  if (document.getElementById('pillGrad').style.display !== 'none')
-    statItems.push({label: 'Gradient', segs: htmlToSegs(document.getElementById('statGrad')?.innerHTML || '')});
-  if (document.getElementById('pillIntercept').style.display !== 'none')
-    statItems.push({label: 'y-intercept', segs: htmlToSegs(document.getElementById('statIntercept')?.innerHTML || '')});
-  if (document.getElementById('pillMaxGrad').style.display !== 'none')
-    statItems.push({label: 'Max gradient', segs: htmlToSegs(document.getElementById('statMaxGrad')?.innerHTML || '')});
+  // Clip path for plot area
+  // Expand clip path by a margin so edge points and error bars aren't cropped
+  const CLIP_M = 12;
+  svg = `<clipPath id="plotClip"><rect x="${PAD_L - CLIP_M}" y="${PAD_T - CLIP_M}" width="${PLOT_W + CLIP_M*2}" height="${PLOT_H + CLIP_M*2}"/></clipPath>` + svg;
 
-  // Use the chart canvas directly — crisp native resolution, no html2canvas softness
-  const chartCanvas = document.getElementById('myChart');
-  const W = chartCanvas.width;
+  // Trend lines (clipped)
+  function polylineFromPts(pts, stroke, width, dash) {
+    if (!pts || !pts.length) return '';
+    const d = pts.filter(p => isFinite(mx(p.x)) && isFinite(my(p.y)))
+      .map(p => `${mx(p.x).toFixed(2)},${my(p.y).toFixed(2)}`).join(' ');
+    const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
+    return `<polyline clip-path="url(#plotClip)" points="${d}" fill="none" stroke="${stroke}" stroke-width="${width}"${dashAttr}/>`;
+  }
 
-  // Pill font sizes match axis label sizes — derived from same clientWidth formula
-  const _pAxis  = Math.max(10, Math.round(_exportCW * 0.016)) * _dpr;
-  const _pTitle = Math.max(13, Math.round(_exportCW * 0.022)) * _dpr;
-  const LABEL_SIZE = Math.round(_pAxis * 0.75);
-  const VAL_SIZE   = Math.round(_pAxis * 1.05);
-  const PILL_H     = Math.round(VAL_SIZE * 2.4);
-  const PILL_PAD_X = Math.round(VAL_SIZE * 0.9);
-  const PILL_GAP   = Math.round(VAL_SIZE * 0.65);
-  const PILL_MARGIN = Math.round(PILL_H * 0.55);
-  const SEP_R = Math.round(VAL_SIZE * 0.14);
-  const SEP_GAP = Math.round(VAL_SIZE * 0.5);
+  if (S.trendPts?.length)    svg += polylineFromPts(S.trendPts,    '#4a7fc1', 2);
+  if (S.extraPts?.length)    svg += polylineFromPts(S.extraPts,    '#4a7fc1', 1.5, '6 4');
+  if (S.maxGradPts?.length)  svg += polylineFromPts(S.maxGradPts,  'rgba(224,123,57,0.85)', 1.5, '5 3');
 
-  (() => {
-
-    // Create offscreen canvas just to measure text
-    const measure = document.createElement('canvas').getContext('2d');
-
-    const SUP_SIZE = VAL_SIZE * 0.65;
-    function measureSegs(segs) {
-      return segs.reduce((total, seg) => {
-        measure.font = `600 ${seg.sup ? SUP_SIZE : VAL_SIZE}px 'DM Sans',sans-serif`;
-        return total + measure.measureText(seg.t).width;
-      }, 0);
-    }
-    const pills = statItems.map(item => {
-      measure.font = `700 ${LABEL_SIZE}px 'DM Sans',sans-serif`;
-      const lw = measure.measureText(item.label.toUpperCase()).width;
-      const vw = measureSegs(item.segs);
-      const pillW = PILL_PAD_X * 2 + lw + SEP_GAP * 2 + SEP_R * 2 + vw;
-      return { ...item, pillW, lw, vw };
+  // Error bars (clipped)
+  if (errorsOn()) {
+    S.errBars.forEach(pt => {
+      const px = mx(pt.x), py = my(pt.y);
+      const cap = 4;
+      if (pt.dy) {
+        const top = my(pt.y + pt.dy), bot = my(pt.y - pt.dy);
+        svg += `<g clip-path="url(#plotClip)"><line x1="${px.toFixed(1)}" y1="${top.toFixed(1)}" x2="${px.toFixed(1)}" y2="${bot.toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/>`;
+        svg += `<line x1="${(px-cap).toFixed(1)}" y1="${top.toFixed(1)}" x2="${(px+cap).toFixed(1)}" y2="${top.toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/>`;
+        svg += `<line x1="${(px-cap).toFixed(1)}" y1="${bot.toFixed(1)}" x2="${(px+cap).toFixed(1)}" y2="${bot.toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/></g>`;
+      }
+      if (pt.dx) {
+        const lft = mx(pt.x - pt.dx), rgt = mx(pt.x + pt.dx);
+        svg += `<g clip-path="url(#plotClip)"><line x1="${lft.toFixed(1)}" y1="${py.toFixed(1)}" x2="${rgt.toFixed(1)}" y2="${py.toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/>`;
+        svg += `<line x1="${lft.toFixed(1)}" y1="${(py-cap).toFixed(1)}" x2="${lft.toFixed(1)}" y2="${(py+cap).toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/>`;
+        svg += `<line x1="${rgt.toFixed(1)}" y1="${(py-cap).toFixed(1)}" x2="${rgt.toFixed(1)}" y2="${(py+cap).toFixed(1)}" stroke="rgba(247,126,157,0.6)" stroke-width="1.5"/></g>`;
+      }
     });
+  }
 
-    const totalPillW = pills.reduce((s, p) => s + p.pillW, 0) + PILL_GAP * (pills.length - 1);
-    const HEADER = statItems.length ? PILL_H + PILL_MARGIN * 2 : 0;
-    const PAD = Math.round(16 * SCALE);
+  // Data points (clipped)
+  S.normalPts.forEach(pt => {
+    svg += `<circle clip-path="url(#plotClip)" cx="${mx(pt.x).toFixed(2)}" cy="${my(pt.y).toFixed(2)}" r="3" fill="#f77e9d"/>`;
+  });
 
-    const off = document.createElement('canvas');
-    off.width = W + PAD * 2;
-    off.height = HEADER + chartCanvas.height + PAD;
-    const ctx = off.getContext('2d');
+  // Anomalous points (clipped, hollow circle)
+  S.anomalyPts.forEach(pt => {
+    svg += `<circle clip-path="url(#plotClip)" cx="${mx(pt.x).toFixed(2)}" cy="${my(pt.y).toFixed(2)}" r="3" fill="#f77e9d"/>`;
+    svg += `<circle clip-path="url(#plotClip)" cx="${mx(pt.x).toFixed(2)}" cy="${my(pt.y).toFixed(2)}" r="9" fill="none" stroke="#f77e9d" stroke-width="1.5"/>`;
+  });
 
-    // White background
+  // ── Stats below chart ──
+  // Collect lines: equation, gradient, y-intercept, max gradient
+  function stripTags(s) { return s.replace(/<sup>([^<]*)<\/sup>/g,'$1').replace(/<[^>]+>/g,''); }
+
+  const xU = document.getElementById('xUnits').value.trim();
+  const yU = document.getElementById('yUnits').value.trim();
+  const xExp = (v => (isNaN(v)||v===0)?null:v)(parseInt(document.getElementById('xExp').value,10));
+  const yExp = (v => (isNaN(v)||v===0)?null:v)(parseInt(document.getElementById('yExp').value,10));
+  function unitStr(units, exp) {
+    if (exp!==null && units) return `10^${exp} ${units}`;
+    if (exp!==null) return `10^${exp}`;
+    return units || '';
+  }
+  const xUnitStr = unitStr(xU, xExp);
+  const yUnitStr = unitStr(yU, yExp);
+  const gradUnit = yUnitStr && xUnitStr ? `${yUnitStr} / ${xUnitStr}` : yUnitStr || xUnitStr || '';
+  const intUnit  = yUnitStr;
+
+  const statLines = [];
+  const eqEl = document.getElementById('statEq');
+  if (eqEl && eqEl.innerHTML !== '—') statLines.push({text: stripTags(eqEl.innerHTML), svg: htmlToSVG(eqEl.innerHTML)});
+  if (document.getElementById('pillGrad').style.display !== 'none') {
+    const g = stripTags(document.getElementById('statGrad').innerHTML);
+    statLines.push({text: `Gradient: ${g}${gradUnit ? ' ' + gradUnit : ''}`, svg: `Gradient: ${htmlToSVG(document.getElementById('statGrad').innerHTML)}${gradUnit ? ' ' + esc(gradUnit) : ''}`});
+  }
+  if (document.getElementById('pillIntercept').style.display !== 'none') {
+    const ic = stripTags(document.getElementById('statIntercept').innerHTML);
+    statLines.push({text: `y-intercept: ${ic}${intUnit ? ' ' + intUnit : ''}`, svg: `y-intercept: ${htmlToSVG(document.getElementById('statIntercept').innerHTML)}${intUnit ? ' ' + esc(intUnit) : ''}`});
+  }
+  if (document.getElementById('pillMaxGrad').style.display !== 'none') {
+    const mg = stripTags(document.getElementById('statMaxGrad').innerHTML);
+    statLines.push({text: `Max gradient: ${mg}${gradUnit ? ' ' + gradUnit : ''}`, svg: `Max gradient: ${htmlToSVG(document.getElementById('statMaxGrad').innerHTML)}${gradUnit ? ' ' + esc(gradUnit) : ''}`});
+  }
+
+  const LINE_H = 20;
+  const STATS_PAD_T = 18;
+  const STATS_H = statLines.length ? STATS_PAD_T + statLines.length * LINE_H + 12 : 0;
+  const SVG_H = SVG_H_CHART + STATS_H;
+
+  statLines.forEach((line, i) => {
+    const y = SVG_H_CHART + STATS_PAD_T + i * LINE_H;
+    svg += `<text x="${(SVG_W/2).toFixed(1)}" y="${y}" text-anchor="middle" font-family="DM Serif Display,serif" font-style="italic" font-size="13" fill="#4a4642">${line.svg}</text>`;
+  });
+
+  // ── Assemble final SVG ──
+  const fullSVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}" xmlns="http://www.w3.org/2000/svg">
+<rect width="${SVG_W}" height="${SVG_H}" fill="white"/>
+${svg}
+</svg>`;
+
+  const titleRaw = document.getElementById('graphTitle').value || 'graph';
+  const filename = titleRaw.replace(/[^\w\s-]/g,'').replace(/\s+/g,'_') + '.png';
+
+  // Render SVG to PNG via Image → Canvas (zoom-independent, Word-compatible)
+  // Base64 encode SVG for reliable canvas rendering
+  const svgB64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(fullSVG)));
+  const img = new Image();
+  img.onload = function() {
+    const SCALE = 3;
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width  = SVG_W * SCALE;
+    offCanvas.height = SVG_H * SCALE;
+    const ctx = offCanvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, off.width, off.height);
-
-    // Draw pills
-    if (pills.length) {
-      let px = (off.width - totalPillW) / 2;
-      const py = PILL_MARGIN;
-
-      pills.forEach(pill => {
-        const r = PILL_H / 2;
-
-        // Pill background
-        ctx.fillStyle = '#f8f7f5';
-        ctx.strokeStyle = '#e8e6e1';
-        ctx.lineWidth = SCALE;
-        ctx.beginPath();
-        ctx.roundRect(px, py, pill.pillW, PILL_H, r);
-        ctx.fill();
-        ctx.stroke();
-
-        // Label
-        ctx.font = `700 ${LABEL_SIZE}px 'DM Sans',sans-serif`;
-        ctx.fillStyle = '#9a9189';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(pill.label.toUpperCase(), px + PILL_PAD_X, py + PILL_H / 2);
-
-        // Separator dot
-        const sepX = px + PILL_PAD_X + pill.lw + SEP_GAP;
-        ctx.fillStyle = '#d0cdc9';
-        ctx.beginPath();
-        ctx.arc(sepX, py + PILL_H / 2, SEP_R, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Value (with superscript support)
-        ctx.fillStyle = '#2c2825';
-        ctx.textBaseline = 'middle';
-        let vx = sepX + SEP_GAP;
-        pill.segs.forEach(seg => {
-          ctx.font = `600 ${seg.sup ? SUP_SIZE : VAL_SIZE}px 'DM Sans',sans-serif`;
-          const dy = seg.sup ? -(VAL_SIZE * 0.22) : 0;
-          ctx.fillText(seg.t, vx, py + PILL_H / 2 + dy);
-          vx += ctx.measureText(seg.t).width;
-        });
-
-        px += pill.pillW + PILL_GAP;
-      });
-    }
-
-    // Draw chart below pills
-    ctx.drawImage(chartCanvas, PAD, HEADER);
-
-    const titleRaw = document.getElementById('graphTitle').value || 'graph';
+    ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+    ctx.scale(SCALE, SCALE);
+    ctx.drawImage(img, 0, 0);
     const a = document.createElement('a');
-    a.href = off.toDataURL('image/png');
-    a.download = titleRaw.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') + '.png';
+    a.href = offCanvas.toDataURL('image/png');
+    a.download = filename;
     a.click();
-  })();
+  };
+  img.onerror = function() {
+    // Fallback: download SVG directly
+    const a = document.createElement('a');
+    a.href = svgB64;
+    a.download = filename.replace('.png', '.svg');
+    a.click();
+  };
+  img.src = svgB64;
 }
 
 
