@@ -363,6 +363,9 @@ input.toggle-cb:disabled + .toggle-btn {
 }
 .modal textarea:focus { border-color: var(--border-focus); background: white; }
 .modal-footer { display: flex; gap: 6px; justify-content: flex-end; }
+.btn-danger { background: var(--red); color: white; border-color: var(--red); }
+.btn-danger:hover { background: #a63b3b; border-color: #a63b3b; }
+.btn-danger:focus-visible, .btn-ghost:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 </style>
 
 <style>
@@ -537,6 +540,7 @@ input.toggle-cb:disabled + .toggle-btn {
             <span id="expOffsetBox" style="width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;font-size:9px;color:white;"></span>
             <span style="font-size:0.76rem;font-weight:500;color:var(--muted);white-space:nowrap;">+ c</span>
           </div>
+          <button class="btn btn-ghost" style="align-self:stretch;padding:0 10px;font-size:0.76rem;flex-shrink:0;" onclick="swapAxes()" title="Swap the X and Y axes (labels, units, uncertainties and data)">⇄ Swap axes</button>
         </div>
       </div>
 
@@ -562,8 +566,13 @@ input.toggle-cb:disabled + .toggle-btn {
         <input class="toggle-cb" type="checkbox" id="cbMaxGrad" onchange="updateChart()">
         <label class="toggle-btn" id="lblMaxGrad" for="cbMaxGrad">Max gradient line</label>
 
-        <input class="toggle-cb" type="checkbox" id="cbOrigin" onchange="updateChart()">
-        <label class="toggle-btn" for="cbOrigin">Include origin</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+          <input class="toggle-cb" type="checkbox" id="cbOrigin" onchange="updateChart()">
+          <label class="toggle-btn" for="cbOrigin">Include origin</label>
+
+          <input class="toggle-cb" type="checkbox" id="cbMinorGrid" onchange="updateChart()">
+          <label class="toggle-btn" for="cbMinorGrid">Minor grid lines</label>
+        </div>
 
       </div>
     </div>
@@ -582,7 +591,7 @@ input.toggle-cb:disabled + .toggle-btn {
       <div class="row-actions">
         <button class="btn btn-primary" onclick="addRow()">+ Add row</button>
         <button class="btn btn-ghost" onclick="openPaste()">Paste data</button>
-        <button class="btn btn-ghost" onclick="clearAll()">Clear all</button>
+        <button class="btn btn-ghost" onclick="askClearAll()">Clear all</button>
       </div>
     </div>
   </div>
@@ -682,6 +691,18 @@ input.toggle-cb:disabled + .toggle-btn {
   </div>
 </div>
 
+<!-- Clear-all confirmation modal -->
+<div class="modal-overlay" id="clearModal" role="dialog" aria-modal="true" aria-labelledby="clearModalTitle">
+  <div class="modal">
+    <h3 id="clearModalTitle">Clear all data?</h3>
+    <p id="clearModalMsg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="clearCancelBtn" onclick="closeClearModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmClearAll()">Yes, clear all</button>
+    </div>
+  </div>
+</div>
+
 <!-- Paste modal -->
 <div class="modal-overlay" id="pasteModal">
   <div class="modal">
@@ -730,6 +751,30 @@ function fmtCoeff(v) {
   return s.startsWith('-') ? '\u2212' + s.slice(1) : s;
 }
 
+// Minor grid line positions for a Chart.js linear scale: subdivides each major
+// interval (5 parts when the major step starts 1 or 5, otherwise 4), skipping
+// positions that already have a major line.
+function minorGridValues(scale) {
+  const ticks = scale.ticks.map(t => t.value);
+  if (ticks.length < 2) return [];
+  const diffs = [];
+  for (let i = 1; i < ticks.length; i++) diffs.push(ticks[i] - ticks[i - 1]);
+  diffs.sort((a, b) => a - b);
+  const step = diffs[Math.floor(diffs.length / 2)];   // median, ignores odd-sized end intervals
+  if (!(step > 0)) return [];
+  const mant = Math.round(step / Math.pow(10, Math.floor(Math.log10(step))) * 100) / 100;
+  const minor = step / ((mant === 1 || mant === 5 || mant === 10) ? 5 : 4);
+  const kStart = Math.ceil(scale.min / minor - 1e-6);
+  const kEnd   = Math.floor(scale.max / minor + 1e-6);
+  if (kEnd - kStart > 500) return [];
+  const tol = step * 1e-6, out = [];
+  for (let k = kStart; k <= kEnd; k++) {
+    const v = k * minor;
+    if (!ticks.some(t => Math.abs(t - v) < tol)) out.push(v);
+  }
+  return out;
+}
+
 function linspace(a, b, n) {
   return Array.from({length: n}, (_, i) => a + (b - a) * i / (n - 1));
 }
@@ -772,7 +817,53 @@ function removeRow(id) {
   renderRows(); updateChart();
 }
 
-function clearAll() { rows = []; renderRows(); updateChart(); }
+function clearAll() {
+  // Reset to 5 blank rows, matching the state on start-up
+  rows = Array.from({length: 5}, () => makeRow());
+  renderRows();
+  updateChart();
+}
+
+// ── Clear-all confirmation ─────────────────────────────────────────────
+function askClearAll() {
+  // Count rows that actually contain something, ignoring blank rows
+  const filled = rows.filter(r => String(r.x).trim() !== '' || String(r.y).trim() !== '').length;
+  if (filled === 0) { clearAll(); return; }   // nothing to lose, so no need to ask
+  document.getElementById('clearModalMsg').textContent =
+    'This will remove ' + (filled === 1 ? '1 data point' : filled + ' data points') +
+    ' from the table and cannot be undone. If you might need it again, click Cancel and use \u201c\u2193 Save data\u201d first.';
+  document.getElementById('clearModal').classList.add('open');
+  document.getElementById('clearCancelBtn').focus();   // Cancel is the safe default
+}
+function closeClearModal() { document.getElementById('clearModal').classList.remove('open'); }
+function confirmClearAll() { closeClearModal(); clearAll(); }
+
+document.getElementById('clearModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeClearModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeClearModal();
+});
+
+// ── Swap axes ──────────────────────────────────────────────────────────
+function swapAxes() {
+  // Swap the paired input fields (label, x10^n, units, global uncertainty)
+  [['xLabel','yLabel'], ['xExp','yExp'], ['xUnits','yUnits'], ['xUncInput','yUncInput']]
+    .forEach(([a, b]) => {
+      const ea = document.getElementById(a), eb = document.getElementById(b);
+      [ea.value, eb.value] = [eb.value, ea.value];
+    });
+
+  // Swap the data in every row (values, uncertainties and auto-fill flags)
+  rows.forEach(r => {
+    [r.x, r.y]           = [r.y, r.x];
+    [r.dx, r.dy]         = [r.dy, r.dx];
+    [r.dxAuto, r.dyAuto] = [r.dyAuto, r.dxAuto];
+  });
+
+  renderRows();
+  updateChart();
+}
 
 // ── Render rows ────────────────────────────────────────────────────────
 function renderRows() {
@@ -1119,6 +1210,7 @@ function updateChart() {
   const cbExtra  = document.getElementById('cbExtrapolate');
   const cbMaxG   = document.getElementById('cbMaxGrad');
   const cbOrigin = document.getElementById('cbOrigin')?.checked;
+  const cbMinor  = document.getElementById('cbMinorGrid')?.checked;
   document.getElementById('lblExtrapolate').style.opacity = isLinear ? '1' : '0.35';
   document.getElementById('lblExtrapolate').style.pointerEvents = isLinear ? '' : 'none';
   if (!isLinear) cbExtra.checked = false;
@@ -1263,6 +1355,23 @@ function updateChart() {
     }
   };
 
+  // ── Minor grid plugin (drawn beneath the data points) ───────────────
+  const minorGridPlugin = {
+    id: 'minorGrid',
+    beforeDatasetsDraw(chart) {
+      if (!cbMinor) return;
+      const {ctx, chartArea: a, scales: {x, y}} = chart;
+      ctx.save();
+      ctx.strokeStyle = '#f0ede9';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      minorGridValues(x).forEach(v => { const px = x.getPixelForValue(v); ctx.moveTo(px, a.top);  ctx.lineTo(px, a.bottom); });
+      minorGridValues(y).forEach(v => { const py = y.getPixelForValue(v); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); });
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
   // ── Error bar plugin ────────────────────────────────────────────────
   const errorBarPlugin = {
     id: 'errorBars',
@@ -1365,6 +1474,9 @@ function updateChart() {
   };
 
   if (chart) { chart.destroy(); chart = null; }
+  // chart.destroy() restores the canvas's original inline style (display:block), which would
+  // undo the hide above and push the "No data yet" message off-centre, so re-apply it here.
+  document.getElementById('myChart').style.display = hasAny ? 'block' : 'none';
   if (!hasAny) return;
 
 
@@ -1386,6 +1498,7 @@ function updateChart() {
     maxGradPts: maxGradPts ? maxGradPts.map(p => ({...p})) : null,
     cbExtraChecked: cbExtra.checked,
     cbOriginChecked: cbOrigin,
+    minorGrid: !!cbMinor,
     xMin: cbOrigin ? Math.min(0, ...normalPts.map(p=>p.x), ...(trendPts||[]).map(p=>p.x), ...(extraPts||[]).map(p=>p.x)) : undefined,
     yMin: cbOrigin ? Math.min(0, ...normalPts.map(p=>p.y), ...(trendPts||[]).map(p=>p.y), ...(extraPts||[]).map(p=>p.y)) : undefined,
   };
@@ -1393,7 +1506,7 @@ function updateChart() {
   chart = new Chart(document.getElementById('myChart').getContext('2d'), {
     type: 'scatter',
     data: {datasets},
-    plugins: [whiteBgPlugin, errorBarPlugin, axisTitlePlugin],
+    plugins: [whiteBgPlugin, minorGridPlugin, errorBarPlugin, axisTitlePlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1430,7 +1543,7 @@ function updateChart() {
       scales: {
         x: {
           title: {display: false},
-          grid: {color: '#f0ede9'},
+          grid: {color: cbMinor ? '#e2ded8' : '#f0ede9'},
           ticks: {color: '#4a4642', font: {family: 'DM Sans', size: _tick}},
           border: {color: '#e8e6e1'},
           ...((() => {
@@ -1442,7 +1555,7 @@ function updateChart() {
         },
         y: {
           title: {display: false},
-          grid: {color: '#f0ede9'},
+          grid: {color: cbMinor ? '#e2ded8' : '#f0ede9'},
           ticks: {color: '#4a4642', font: {family: 'DM Sans', size: _tick}},
           border: {color: '#e8e6e1'},
           ...(cbOrigin ? {min: Math.min(0, ...normalPts.map(p => p.y), ...(trendPts||[]).map(p => p.y), ...(extraPts||[]).map(p => p.y))} : {}),
@@ -1496,14 +1609,27 @@ function exportImage() {
   // ── Build SVG parts ──
   let svg = '';
 
+  // Minor grid lines (optional) — drawn first so the major lines sit on top
+  if (S.minorGrid) {
+    minorGridValues(chart.scales.x).forEach(v => {
+      const x = mx(v);
+      svg += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T+PLOT_H}" stroke="#f0ede9" stroke-width="1"/>`;
+    });
+    minorGridValues(chart.scales.y).forEach(v => {
+      const y = my(v);
+      svg += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${PAD_L+PLOT_W}" y2="${y.toFixed(1)}" stroke="#f0ede9" stroke-width="1"/>`;
+    });
+  }
+
   // Grid lines
+  const majorGridColor = S.minorGrid ? '#e2ded8' : '#f0ede9';
   xTicks.forEach(t => {
     const x = mx(t.val);
-    svg += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T+PLOT_H}" stroke="#f0ede9" stroke-width="1"/>`;
+    svg += `<line x1="${x.toFixed(1)}" y1="${PAD_T}" x2="${x.toFixed(1)}" y2="${PAD_T+PLOT_H}" stroke="${majorGridColor}" stroke-width="1"/>`;
   });
   yTicks.forEach(t => {
     const y = my(t.val);
-    svg += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${PAD_L+PLOT_W}" y2="${y.toFixed(1)}" stroke="#f0ede9" stroke-width="1"/>`;
+    svg += `<line x1="${PAD_L}" y1="${y.toFixed(1)}" x2="${PAD_L+PLOT_W}" y2="${y.toFixed(1)}" stroke="${majorGridColor}" stroke-width="1"/>`;
   });
 
   // Plot border
@@ -1682,6 +1808,7 @@ function getState() {
     extrapolate:   document.getElementById('cbExtrapolate').checked,
     showMaxGrad:   document.getElementById('cbMaxGrad').checked,
     includeOrigin: document.getElementById('cbOrigin').checked,
+    minorGrid:     document.getElementById('cbMinorGrid').checked,
     expOffset:     document.getElementById('cbExpOffset').checked,
     xUncInput:     document.getElementById('xUncInput').value,
     yUncInput:     document.getElementById('yUncInput').value,
@@ -1703,6 +1830,7 @@ function setState(state) {
   chk('cbExtrapolate', state.extrapolate);
   chk('cbMaxGrad', state.showMaxGrad);
   chk('cbOrigin', state.includeOrigin);
+  chk('cbMinorGrid', state.minorGrid);
   chk('cbExpOffset', state.expOffset);
   syncExpOffset();
   set('xUncInput', state.xUncInput);
@@ -1825,6 +1953,7 @@ const GUIDE_SECTIONS = {
     <h3 class="g-h3">Labels panel</h3>
     <p class="g-p">Enter your graph title, axis labels, and units. Use <code>^</code> followed by a number for superscripts in any field — <code>s^2</code> displays as s².</p>
     <p class="g-p">The <strong>×10<sup>n</sup> box</strong> sets a scale factor per axis. Enter <strong>−3</strong> to display values in 10<sup>−3</sup> units. The gradient is given in SI units automatically.</p>
+    <p class="g-p"><span class="g-tag">⇄ Swap axes</span> exchanges X and Y everywhere — labels, units, scale factors, uncertainties and every data point. Click it again to swap back. Your trend line choice is left unchanged, so check it still suits the new relationship.</p>
     <h3 class="g-h3">Trend line</h3>
     <p class="g-p">Choose the mathematical relationship you expect. See the Reference section for guidance.</p>
     <h3 class="g-h3">Toggles</h3>
@@ -1832,6 +1961,7 @@ const GUIDE_SECTIONS = {
     <p class="g-p"><span class="g-tag g-pink">Extrapolate to y-intercept</span> — Extends the best-fit line back to the y-axis. Linear fits only.</p>
     <p class="g-p"><span class="g-tag g-pink">Max gradient line</span> — Draws the steepest line through all error boxes. Requires uncertainty columns with data.</p>
     <p class="g-p"><span class="g-tag g-pink">Include origin</span> — Ensures the origin (0, 0) is always visible on the graph, even if your data starts some distance away. Works with all trend types. The axis can still extend below zero if the data or trend line requires it.</p>
+    <p class="g-p"><span class="g-tag g-pink">Minor grid lines</span> — Adds finer grid lines between the main ones, like graph paper, which makes it easier to read values off the graph. They are included in the exported image too.</p>
     <h3 class="g-h3">Data table</h3>
     <p class="g-p">Each row is one data point. Click <span class="g-tag">+ Add row</span> to add a blank row, or <span class="g-tag">Paste data</span> to import from a spreadsheet. The <span class="g-tag g-pink">○</span> button marks a point as anomalous — click again to unmark.</p>
     <h3 class="g-h3">Statistics</h3>
